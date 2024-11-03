@@ -17,7 +17,8 @@ void *__stop_custom_data;
 
 extern size_t __gc_stack_top, __gc_stack_bottom;
 
-extern int Lread();
+extern Value Lread();
+extern int32_t Lwrite(Value boxedInt);
 }
 
 enum Binop {
@@ -224,9 +225,17 @@ void Interpreter::step() {
     switch (low) {
     // 0x70
     // CALL Lread
-    case 0x0:
+    case 0x0: {
       stack.pushOperand(Lread());
       return;
+    }
+    // 0x71
+    // CALL Lwrite
+    case 0x1: {
+      Lwrite(stack.popOperand());
+      stack.pushIntOperand(0);
+      return;
+    }
     }
     break;
   }
