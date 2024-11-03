@@ -76,6 +76,19 @@ void Interpreter::step() {
     }
     }
   }
+  // LD
+  case 0x2: {
+    switch (low) {
+    // 0x20 n:32
+    // LD G(n)
+    case 0x0: {
+      int32_t globalIndex = readWord();
+      int32_t &global = globalArea->accessGlobal(globalIndex);
+      stack.pushOperand(global);
+      return;
+    }
+    }
+  }
   // ST
   case 0x4: {
     switch (low) {
