@@ -49,7 +49,8 @@ public:
   void run();
 
 private:
-  void step();
+  /// \return true to continue, false to stop
+  bool step();
 
   char readByte();
   int32_t readWord();
@@ -73,7 +74,8 @@ void Interpreter::run() {
   while (true) {
     const char *currentInstruction = instructionPointer;
     try {
-      step();
+      if (!step())
+        return;
     } catch (std::runtime_error &e) {
       throw std::runtime_error(
           fmt::format("runtime error at {:#x}: {}",
@@ -82,7 +84,7 @@ void Interpreter::run() {
   }
 }
 
-void Interpreter::step() {
+bool Interpreter::step() {
   char byte = readByte();
   char high = (0xF0 & byte) >> 4;
   char low = 0x0F & byte;
@@ -154,7 +156,7 @@ void Interpreter::step() {
     }
     }
     stack.pushIntOperand(result);
-    return;
+    return true;
   }
   case 0x1: {
     switch (low) {
@@ -162,13 +164,19 @@ void Interpreter::step() {
     // CONST n
     case 0x0: {
       stack.pushIntOperand(readWord());
-      return;
+      return true;
+    }
+    // 0x16
+    // END
+    case 0x6: {
+      stack.endFunction();
+      return stack.isNotEmpty();
     }
     // 0x18
     // DROP
     case 0x8: {
       stack.popOperand();
-      return;
+      return true;
     }
     }
     break;
@@ -182,7 +190,7 @@ void Interpreter::step() {
       int32_t globalIndex = readWord();
       Value &global = globalArea->accessGlobal(globalIndex);
       stack.pushOperand(global);
-      return;
+      return true;
     }
     }
     break;
@@ -197,7 +205,7 @@ void Interpreter::step() {
       Value &global = globalArea->accessGlobal(globalIndex);
       Value operand = stack.peakOperand();
       global = operand;
-      return;
+      return true;
     }
     }
     break;
@@ -210,13 +218,13 @@ void Interpreter::step() {
       readWord();
       int32_t nlocals = readWord();
       stack.beginFunction(nlocals);
-      return;
+      return true;
     }
     // 0x5a n:32
     // LINE n
     case 0xa: {
       readWord();
-      return;
+      return true;
     }
     }
     break;
@@ -227,14 +235,14 @@ void Interpreter::step() {
     // CALL Lread
     case 0x0: {
       stack.pushOperand(Lread());
-      return;
+      return true;
     }
     // 0x71
     // CALL Lwrite
     case 0x1: {
       Lwrite(stack.popOperand());
       stack.pushIntOperand(0);
-      return;
+      return true;
     }
     }
     break;
