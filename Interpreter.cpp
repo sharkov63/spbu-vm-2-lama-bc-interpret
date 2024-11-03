@@ -20,6 +20,7 @@ extern size_t __gc_stack_top, __gc_stack_bottom;
 extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
 extern int32_t Llength(void *p);
+extern void *Belem(void *p, int i);
 
 extern void *Bstring(void *cstr);
 }
@@ -208,6 +209,16 @@ bool Interpreter::step() {
       stack.popOperand();
       return true;
     }
+    // 0x1b
+    // ELEM
+    case 0xb: {
+      Value index = stack.popOperand();
+      Value container = stack.popOperand();
+      Value element = reinterpret_cast<Value>(
+          Belem(reinterpret_cast<void *>(container), index));
+      stack.pushOperand(element);
+      return true;
+    }
     }
     break;
   }
@@ -286,9 +297,9 @@ bool Interpreter::step() {
     // 0x72
     // CALL Llength
     case 0x2: {
-      Value stringValue = stack.popOperand();
-      Value lengthValue = Llength(reinterpret_cast<void *>(stringValue));
-      stack.pushOperand(lengthValue);
+      Value string = stack.popOperand();
+      Value length = Llength(reinterpret_cast<void *>(string));
+      stack.pushOperand(length);
       return true;
     }
     }
