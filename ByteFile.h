@@ -1,9 +1,12 @@
 #pragma once
 
+#include "fmt/format.h"
 #include <memory>
 #include <string>
 
 namespace lama {
+
+class GlobalArea;
 
 class ByteFile {
 public:
@@ -13,6 +16,8 @@ public:
   static ByteFile load(std::string path);
 
   const char *getCode() const { return code; }
+
+  std::shared_ptr<GlobalArea> getGlobalArea() { return globalArea; }
 
 private:
   void init();
@@ -24,8 +29,7 @@ private:
   const char *stringTable;
   size_t stringTableSizeBytes;
 
-  std::unique_ptr<int32_t[]> globalArea;
-  size_t globalAreaSizeWords;
+  std::shared_ptr<GlobalArea> globalArea;
 
   const int32_t *publicSymbolTable;
   size_t publicSymbolsNum;

@@ -11,13 +11,16 @@ runtime:
 Main.o: Main.cpp ByteFile.h Interpreter.h
 	$(CXX) -o $@ $(INTERPRETER_FLAGS) -c Main.cpp
 
+GlobalArea.o: GlobalArea.cpp GlobalArea.h
+	$(CXX) -o $@ $(INTERPRETER_FLAGS) -c GlobalArea.cpp
+
 ByteFile.o: ByteFile.cpp ByteFile.h
 	$(CXX) -o $@ $(INTERPRETER_FLAGS) -c ByteFile.cpp
 
 Interpreter.o: Interpreter.cpp Interpreter.h
 	$(CXX) -o $@ $(INTERPRETER_FLAGS) -c Interpreter.cpp
 
-YAILama: Main.o ByteFile.o Interpreter.o
+YAILama: Main.o GlobalArea.o ByteFile.o Interpreter.o
 	$(CXX) -o $@ $(INTERPRETER_FLAGS) Lama/runtime/runtime.o Lama/runtime/gc.o $^
 
 clean:

@@ -1,4 +1,5 @@
 #include "ByteFile.h"
+#include "GlobalArea.h"
 #include "fmt/format.h"
 #include <fstream>
 
@@ -27,7 +28,7 @@ void ByteFile::init() {
   }
   currentOffset += sizeof(int32_t);
 
-  globalAreaSizeWords = header[1];
+  size_t globalAreaSizeWords = header[1];
   if (globalAreaSizeWords < 0) {
     throwOnInvalidFile(fmt::format(
         fmt::format("global area size is negative ({})", globalAreaSizeWords)));
@@ -58,7 +59,7 @@ void ByteFile::init() {
   stringTable = data.get() + currentOffset;
   currentOffset += stringTableSizeBytes;
 
-  globalArea = std::unique_ptr<int32_t[]>(new int32_t[globalAreaSizeWords]);
+  globalArea = std::make_shared<GlobalArea>(globalAreaSizeWords);
 
   code = &stringTable[stringTableSizeBytes];
   codeSizeBytes = sizeBytes - currentOffset;
