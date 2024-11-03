@@ -14,6 +14,8 @@ void *__start_custom_data;
 void *__stop_custom_data;
 
 extern size_t __gc_stack_top, __gc_stack_bottom;
+
+extern int Lread();
 }
 
 namespace {
@@ -26,7 +28,8 @@ class Stack {
 public:
   Stack();
 
-  void beginFunction(int nlocals);
+  void beginFunction(size_t nlocals);
+  void push(int32_t value);
 
 private:
   std::array<int32_t, STACK_SIZE> data;
@@ -42,12 +45,17 @@ Stack::Stack() {
   // __gc_stack_top = __gc_stack_bottom;
 }
 
-void Stack::beginFunction(int nlocals) {
+void Stack::beginFunction(size_t nlocals) {
   baseStack.push_back(base);
   base = top;
   top -= nlocals;
   // Fill with boxed zeros so that GC will skip these
   memset(top, 1, base - top);
+}
+
+void Stack::push(int32_t value) {
+  --top;
+  *top = value;
 }
 
 class Interpreter {
@@ -97,6 +105,14 @@ void Interpreter::step() {
       readWord();
       int32_t nlocals = readWord();
       stack.beginFunction(nlocals);
+      return;
+    }
+  case 7:
+    switch (low) {
+    // 0x70
+    // CALL Lread
+    case 0:
+      stack.push(Lread());
       return;
     }
   }
