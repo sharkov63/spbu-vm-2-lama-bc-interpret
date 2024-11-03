@@ -20,9 +20,10 @@ extern size_t __gc_stack_top, __gc_stack_bottom;
 extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
 extern int32_t Llength(void *p);
-extern void *Belem(void *p, int i);
 
+extern void *Belem(void *p, int i);
 extern void *Bstring(void *cstr);
+extern void *Bsta(void *v, int i, void *x);
 }
 
 enum VarDesignation {
@@ -185,6 +186,18 @@ bool Interpreter::step() {
       const char *cstr = byteFile.getStringAt(offset);
       Value string = reinterpret_cast<Value>(Bstring(const_cast<char *>(cstr)));
       stack.pushOperand(string);
+      return true;
+    }
+    // 0x14
+    // STA
+    case 0x4: {
+      Value value = stack.popOperand();
+      Value index = stack.popOperand();
+      Value container = stack.popOperand();
+      Value result =
+          reinterpret_cast<Value>(Bsta(reinterpret_cast<void *>(value), index,
+                                       reinterpret_cast<void *>(container)));
+      stack.pushOperand(result);
       return true;
     }
     // 0x15 l:32
