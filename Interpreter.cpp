@@ -97,7 +97,6 @@ bool Interpreter::step() {
       throw std::runtime_error("division by zero");
     int32_t result;
     switch (low) {
-    // BINOP +
     case BINOP_Add: {
       result = lhs + rhs;
       break;

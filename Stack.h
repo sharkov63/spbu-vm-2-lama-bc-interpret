@@ -14,11 +14,16 @@ public:
   Stack();
 
   void beginFunction(size_t nlocals);
+  void endFunction();
+
   void pushOperand(Value operand);
   Value peakOperand() const;
   Value popOperand();
   void pushIntOperand(int32_t operand);
   int32_t popIntOperand();
+
+  bool isEmpty() const { return baseStack.empty(); }
+  bool isNotEmpty() const { return !isEmpty(); }
 
 private:
   void checkNonEmptyOperandStack() const;

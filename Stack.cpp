@@ -16,13 +16,24 @@ Stack::Stack() {
 
 void Stack::beginFunction(size_t nlocals) {
   if (operandStackSize != 0) {
-    throw std::runtime_error("non-empty operand stack upon begging a function");
+    throw std::runtime_error(
+        "non-empty operand stack upon beginning a function");
   }
   baseStack.push_back(base);
   base = top;
   top -= nlocals;
   // Fill with boxed zeros so that GC will skip these
   memset(top, 1, base - top);
+}
+
+void Stack::endFunction() {
+  if (baseStack.empty()) {
+    throw std::runtime_error("empty base stack at function end");
+  }
+  top = base;
+  base = baseStack.back();
+  baseStack.pop_back();
+  operandStackSize = 0;
 }
 
 void Stack::pushOperand(Value value) {
