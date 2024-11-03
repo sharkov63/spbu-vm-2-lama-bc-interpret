@@ -1,8 +1,8 @@
 #include "Interpreter.h"
 #include "ByteFile.h"
 #include "GlobalArea.h"
+#include "Stack.h"
 #include "fmt/format.h"
-#include <array>
 #include <stdexcept>
 
 using namespace lama;
@@ -21,58 +21,7 @@ extern int Lread();
 
 namespace {
 
-#define FILLER (1)
-
-#define STACK_SIZE (1 << 20)
-
-class Stack {
-public:
-  Stack();
-
-  void beginFunction(size_t nlocals);
-  void push(int32_t value);
-  int32_t pop();
-
-private:
-  std::array<int32_t, STACK_SIZE> data;
-  int32_t *base;
-  int32_t *top;
-
-  size_t operandStackSize = 0;
-
-  std::vector<int32_t *> baseStack;
-} stack;
-
-Stack::Stack() {
-  top = data.end();
-  // __gc_stack_bottom = (size_t)top;
-  // __gc_stack_top = __gc_stack_bottom;
-}
-
-void Stack::beginFunction(size_t nlocals) {
-  if (operandStackSize != 0) {
-    throw std::runtime_error("non-empty operand stack upon begging a function");
-  }
-  baseStack.push_back(base);
-  base = top;
-  top -= nlocals;
-  // Fill with boxed zeros so that GC will skip these
-  memset(top, 1, base - top);
-}
-
-void Stack::push(int32_t value) {
-  ++operandStackSize;
-  --top;
-  *top = value;
-}
-
-int32_t Stack::pop() {
-  if (operandStackSize == 0) {
-    throw std::runtime_error("cannot pop from empty operand stack");
-  }
-  --operandStackSize;
-  return *(top++);
-}
+Stack stack;
 
 class Interpreter {
 public:
@@ -103,12 +52,13 @@ Interpreter::Interpreter(ByteFile byteFile)
 
 void Interpreter::run() {
   __gc_init();
-  while (true)
-    step();
-}
-
-static void runtimeError(std::string message) {
-  throw std::runtime_error("runtime error: " + message);
+  while (true) {
+    try {
+      step();
+    } catch (std::runtime_error &e) {
+      throw std::runtime_error(fmt::format("runtime error: {}", e.what()));
+    }
+  }
 }
 
 void Interpreter::step() {
@@ -116,6 +66,16 @@ void Interpreter::step() {
   char high = (0xF0 & byte) >> 4;
   char low = 0x0F & byte;
   switch (high) {
+  case 0x1: {
+    switch (low) {
+    // 0x18
+    // DROP
+    case 0x8: {
+      stack.popOperand();
+      return;
+    }
+    }
+  }
   // ST
   case 0x4: {
     switch (low) {
@@ -124,7 +84,7 @@ void Interpreter::step() {
     case 0x0: {
       int32_t globalIndex = readWord();
       int32_t &global = globalArea->accessGlobal(globalIndex);
-      int32_t operand = stack.pop();
+      int32_t operand = stack.peakOperand();
       global = operand;
       return;
     }
@@ -153,12 +113,13 @@ void Interpreter::step() {
     // 0x70
     // CALL Lread
     case 0x0:
-      stack.push(Lread());
+      stack.pushOperand(Lread());
       return;
     }
   }
   }
-  runtimeError(fmt::format("unsupported instruction code {:#x}", byte));
+  throw std::runtime_error(
+      fmt::format("unsupported instruction code {:#x}", byte));
 }
 
 char Interpreter::readByte() { return *instructionPointer++; }
