@@ -1,6 +1,5 @@
 #include "GlobalArea.h"
-#include "fmt/format.h"
-#include <stdexcept>
+#include "Error.h"
 
 using namespace lama;
 
@@ -13,9 +12,9 @@ GlobalArea::GlobalArea(size_t sizeWords)
 
 Value &GlobalArea::accessGlobal(int32_t index) {
   if (index < 0 || index >= sizeWords) {
-    throw std::runtime_error(
-        fmt::format("access out of global area bounds: {} is not in [0, {})",
-                    index, sizeWords));
+    runtimeError(
+        "access global variable out of bounds: index {} is not in [0, {})",
+        index, sizeWords);
   }
   return data.get()[index];
 }

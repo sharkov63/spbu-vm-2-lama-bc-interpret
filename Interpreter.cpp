@@ -1,11 +1,10 @@
 #include "Interpreter.h"
 #include "ByteFile.h"
+#include "Error.h"
 #include "GlobalArea.h"
 #include "Stack.h"
 #include "Value.h"
-#include "fmt/format.h"
 #include <iostream>
-#include <stdexcept>
 
 using namespace lama;
 
@@ -88,9 +87,8 @@ void Interpreter::run() {
       if (!step())
         return;
     } catch (std::runtime_error &e) {
-      throw std::runtime_error(
-          fmt::format("runtime error at {:#x}: {}",
-                      currentInstruction - byteFile.getCode(), e.what()));
+      runtimeError("runtime error at {:#x}: {}",
+                   currentInstruction - byteFile.getCode(), e.what());
     }
   }
 }
@@ -107,7 +105,7 @@ bool Interpreter::step() {
     int32_t rhs = stack.popIntOperand();
     int32_t lhs = stack.popIntOperand();
     if ((low == BINOP_Div || low == BINOP_Mod) && rhs == 0)
-      throw std::runtime_error("division by zero");
+      runtimeError("division by zero");
     int32_t result;
     switch (low) {
     case BINOP_Add: {
@@ -163,8 +161,7 @@ bool Interpreter::step() {
       break;
     }
     default: {
-      throw std::runtime_error(
-          fmt::format("undefined binary operator with code {:x}", low));
+      runtimeError("undefined binary operator with code {:x}", low);
     }
     }
     stack.pushIntOperand(result);
@@ -288,8 +285,7 @@ bool Interpreter::step() {
     break;
   }
   }
-  throw std::runtime_error(
-      fmt::format("unsupported instruction code {:#04x}", byte));
+  runtimeError("unsupported instruction code {:#04x}", byte);
 }
 
 char Interpreter::readByte() { return *instructionPointer++; }
@@ -310,8 +306,7 @@ Value &Interpreter::accessVar(char designation, int32_t index) {
   case LOC_Arg:
     return stack.accessArg(index);
   }
-  throw std::runtime_error(
-      fmt::format("unsupported variable designation {:#x}", designation));
+  runtimeError("unsupported variable designation {:#x}", designation);
 }
 
 void lama::interpret(ByteFile byteFile) {

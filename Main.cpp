@@ -1,7 +1,6 @@
 #include "ByteFile.h"
 #include "Interpreter.h"
 #include <iostream>
-#include <memory>
 
 using namespace lama;
 

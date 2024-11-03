@@ -1,6 +1,6 @@
 #include "ByteFile.h"
+#include "Error.h"
 #include "GlobalArea.h"
-#include "fmt/format.h"
 #include <fstream>
 
 using namespace lama;
@@ -11,7 +11,7 @@ ByteFile::ByteFile(std::unique_ptr<const char[]> data, size_t sizeBytes)
 }
 
 static void throwOnInvalidFile(std::string message) {
-  throw std::runtime_error("invalid bytefile: " + message);
+  runtimeError("invalid bytefile: {}", message);
 }
 
 void ByteFile::init() {
@@ -68,7 +68,7 @@ void ByteFile::init() {
 ByteFile ByteFile::load(std::string path) {
   std::ifstream stream(path, std::ios::binary | std::ios::ate);
   if (stream.fail()) {
-    throw std::runtime_error("failed to read bytecode at " + path);
+    runtimeError("failed to read bytecode from {}", path);
   }
   auto sizeBytes = stream.tellg();
   stream.seekg(0, std::ios::beg);
@@ -79,23 +79,20 @@ ByteFile ByteFile::load(std::string path) {
 
 const char *ByteFile::getAddressFor(size_t offset) const {
   if (offset > codeSizeBytes) {
-    throw std::runtime_error(
-        fmt::format("access instruction address {:#x} out of bounds [0, {:#x})",
-                    offset, codeSizeBytes));
+    runtimeError("access instruction address {:#x} out of bounds [0, {:#x})",
+                 offset, codeSizeBytes);
   }
   return code + offset;
 }
 
 const char *ByteFile::getStringAt(size_t offset) const {
   if (offset > stringTableSizeBytes) {
-    throw std::runtime_error(
-        fmt::format("access string at {:#x} out of bounds [0, {:#x}]", offset,
-                    stringTableSizeBytes));
+    runtimeError("access string at {:#x} out of bounds [0, {:#x}]", offset,
+                 stringTableSizeBytes);
   }
   if (std::find(stringTable + offset, stringTable + stringTableSizeBytes,
                 '\0') == stringTable + stringTableSizeBytes) {
-    throw std::runtime_error(
-        fmt::format("stringTable has no correct string at {:#x}", offset));
+    runtimeError("stringTable has no correct string at {:#x}", offset);
   }
   return stringTable + offset;
 }
