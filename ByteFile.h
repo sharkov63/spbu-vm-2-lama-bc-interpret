@@ -17,6 +17,8 @@ public:
 
   const char *getCode() const { return code; }
 
+  const char *getAddressFor(size_t offset) const;
+
   std::shared_ptr<GlobalArea> getGlobalArea() { return globalArea; }
 
 private:

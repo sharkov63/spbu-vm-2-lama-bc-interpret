@@ -180,14 +180,18 @@ bool Interpreter::step() {
     // 0x15 l:32
     // JMP l
     case 0x5: {
-      instructionPointer = byteFile.getCode() + readWord();
+      uint32_t offset = readWord();
+      instructionPointer = byteFile.getAddressFor(offset);
       return true;
     }
     // 0x16
     // END
     case 0x6: {
-      stack.endFunction();
-      return stack.isNotEmpty();
+      const char *returnAddress = stack.endFunction();
+      if (stack.isEmpty())
+        return false;
+      instructionPointer = returnAddress;
+      return true;
     }
     // 0x18
     // DROP
@@ -222,18 +226,28 @@ bool Interpreter::step() {
     //   where x = 'z' | x = 'nz'
     case 0x0:
     case 0x1: {
-      int32_t offset = readWord();
-      if ((bool)stack.popIntOperand() == (bool)low) {
-        instructionPointer = byteFile.getCode() + offset;
-      }
+      uint32_t offset = readWord();
+      bool boolValue = stack.popIntOperand();
+      if (boolValue == (bool)low)
+        instructionPointer = byteFile.getAddressFor(offset);
       return true;
     }
     // 0x52 n:32 n:32
     // BEGIN nargs nlocals
     case 0x2: {
+      uint32_t nargs = readWord();
+      uint32_t nlocals = readWord();
+      stack.beginFunction(nargs, nlocals);
+      return true;
+    }
+    // 0x56 l:32 n:32
+    // CALL address nargs
+    case 0x6: {
+      uint32_t offset = readWord();
+      const char *address = byteFile.getAddressFor(offset);
       readWord();
-      int32_t nlocals = readWord();
-      stack.beginFunction(nlocals);
+      stack.setNextReturnAddress(instructionPointer);
+      instructionPointer = address;
       return true;
     }
     // 0x5a n:32

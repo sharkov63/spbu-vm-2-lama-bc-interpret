@@ -1,5 +1,6 @@
 #include "Stack.h"
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 
 using namespace lama;
@@ -9,31 +10,48 @@ using namespace lama;
 //===----------------------------------------------------------------------===//
 
 Stack::Stack() {
-  frame.top = frame.base = data.end();
+  frame.base = data.end();
+  // Two arguments to main: argc and argv
+  frame.top = frame.base - 2;
+  frame.operandStackSize = 2;
   // __gc_stack_bottom = (size_t)top;
   // __gc_stack_top = __gc_stack_bottom;
 }
 
-void Stack::beginFunction(size_t nlocals) {
-  if (frame.operandStackSize != 0) {
+void Stack::beginFunction(size_t nargs, size_t nlocals) {
+  if (frame.operandStackSize != nargs) {
     throw std::runtime_error(
-        "non-empty operand stack upon beginning a function");
+        fmt::format("expected {} arguments, but found operand stack of size {}",
+                    nargs, frame.operandStackSize));
   }
+  Value *newBase = frame.top;
+  frame.operandStackSize = 0;
+  frame.top += nargs;
   frameStack.push_back(frame);
-  frame.base = frame.top;
+  frame.base = newBase;
   frame.top = frame.base - nlocals;
   frame.nlocals = nlocals;
   frame.operandStackSize = 0;
+  frame.returnAddress = nextReturnAddress;
   // Fill with boxed zeros so that GC will skip these
   memset(frame.top, 1, frame.base - frame.top);
 }
 
-void Stack::endFunction() {
+const char *Stack::endFunction() {
   if (isEmpty()) {
     throw std::runtime_error("no function to end");
   }
+  if (frame.operandStackSize != 1) {
+    throw std::runtime_error(fmt::format(
+        "attempt to end function with operand stack size {}, expected 1",
+        frame.operandStackSize));
+  }
+  Value top = *frame.top;
+  const char *returnAddress = frame.returnAddress;
   frame = frameStack.back();
   frameStack.pop_back();
+  pushIntOperand(top);
+  return returnAddress;
 }
 
 void Stack::pushOperand(Value value) {

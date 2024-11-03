@@ -13,8 +13,9 @@ class Stack {
 public:
   Stack();
 
-  void beginFunction(size_t nlocals);
-  void endFunction();
+  void beginFunction(size_t nargs, size_t nlocals);
+  /// \return return address; invalid if ended main
+  const char *endFunction();
 
   void pushOperand(Value operand);
   Value peakOperand() const;
@@ -25,7 +26,11 @@ public:
   bool isEmpty() const { return frameStack.empty(); }
   bool isNotEmpty() const { return !isEmpty(); }
 
-  Value &accessLocal(int32_t index);
+  Value &accessLocal(ssize_t index);
+
+  void setNextReturnAddress(const char *address) {
+    nextReturnAddress = address;
+  }
 
 private:
   void checkNonEmptyOperandStack() const;
@@ -33,14 +38,17 @@ private:
   struct Frame {
     Value *base;
     Value *top;
+    size_t nargs;
     size_t nlocals;
     size_t operandStackSize = 0;
+    const char *returnAddress;
   };
 
 private:
   std::array<Value, STACK_SIZE> data;
   Frame frame;
   std::vector<Frame> frameStack;
+  const char *nextReturnAddress;
 };
 
 } // namespace lama

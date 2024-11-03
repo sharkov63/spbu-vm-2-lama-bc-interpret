@@ -76,3 +76,12 @@ ByteFile ByteFile::load(std::string path) {
   stream.read(data.get(), sizeBytes);
   return ByteFile(std::move(data), sizeBytes);
 }
+
+const char *ByteFile::getAddressFor(size_t offset) const {
+  if (offset > codeSizeBytes) {
+    throw std::runtime_error(
+        fmt::format("access instruction address {:#x} out of bounds [0, {:#x})",
+                    offset, codeSizeBytes));
+  }
+  return code + offset;
+}
