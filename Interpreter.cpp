@@ -97,24 +97,33 @@ void Interpreter::step() {
   char high = (0xF0 & byte) >> 4;
   char low = 0x0F & byte;
   switch (high) {
-  case 5:
+  case 0x5: {
     switch (low) {
     // 0x52 n:32 n:32
     // BEGIN nargs nlocals
-    case 2:
+    case 0x2: {
       readWord();
       int32_t nlocals = readWord();
       stack.beginFunction(nlocals);
       return;
     }
-  case 7:
+    // 0x5a n:32
+    // LINE n
+    case 0xa: {
+      readWord();
+      return;
+    }
+    }
+  }
+  case 0x7: {
     switch (low) {
     // 0x70
     // CALL Lread
-    case 0:
+    case 0x0:
       stack.push(Lread());
       return;
     }
+  }
   }
   runtimeError(fmt::format("unsupported instruction code {:#x}", byte));
 }
