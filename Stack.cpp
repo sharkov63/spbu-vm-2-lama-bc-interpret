@@ -71,7 +71,7 @@ Value &Stack::accessLocal(int32_t index) {
         "access local variable out of bounds: index {} is not in [0, {})",
         index, frame.nlocals));
   }
-  return frame.base[-index];
+  return frame.base[-index - 1];
 }
 
 void Stack::checkNonEmptyOperandStack() const {

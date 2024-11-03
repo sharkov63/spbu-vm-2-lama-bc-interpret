@@ -4,6 +4,7 @@
 #include "Stack.h"
 #include "Value.h"
 #include "fmt/format.h"
+#include <iostream>
 #include <stdexcept>
 
 using namespace lama;
@@ -94,6 +95,8 @@ void Interpreter::run() {
 }
 
 bool Interpreter::step() {
+  // std::cerr << fmt::format("interpreting at {:#x}\n",
+  //                          instructionPointer - byteFile.getCode());
   char byte = readByte();
   char high = (0xF0 & byte) >> 4;
   char low = 0x0F & byte;
@@ -214,6 +217,17 @@ bool Interpreter::step() {
   }
   case 0x5: {
     switch (low) {
+    // 0x5x l:32
+    // CJMPx l
+    //   where x = 'z' | x = 'nz'
+    case 0x0:
+    case 0x1: {
+      int32_t offset = readWord();
+      if ((bool)stack.popIntOperand() == (bool)low) {
+        instructionPointer = byteFile.getCode() + offset;
+      }
+      return true;
+    }
     // 0x52 n:32 n:32
     // BEGIN nargs nlocals
     case 0x2: {
