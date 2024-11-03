@@ -174,6 +174,12 @@ bool Interpreter::step() {
       stack.pushIntOperand(readWord());
       return true;
     }
+    // 0x15 l:32
+    // JMP l
+    case 0x5: {
+      instructionPointer = byteFile.getCode() + readWord();
+      return true;
+    }
     // 0x16
     // END
     case 0x6: {
