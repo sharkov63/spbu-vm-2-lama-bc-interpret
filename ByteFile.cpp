@@ -85,3 +85,17 @@ const char *ByteFile::getAddressFor(size_t offset) const {
   }
   return code + offset;
 }
+
+const char *ByteFile::getStringAt(size_t offset) const {
+  if (offset > stringTableSizeBytes) {
+    throw std::runtime_error(
+        fmt::format("access string at {:#x} out of bounds [0, {:#x}]", offset,
+                    stringTableSizeBytes));
+  }
+  if (std::find(stringTable + offset, stringTable + stringTableSizeBytes,
+                '\0') == stringTable + stringTableSizeBytes) {
+    throw std::runtime_error(
+        fmt::format("stringTable has no correct string at {:#x}", offset));
+  }
+  return stringTable + offset;
+}

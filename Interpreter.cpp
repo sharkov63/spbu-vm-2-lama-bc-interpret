@@ -20,6 +20,7 @@ extern size_t __gc_stack_top, __gc_stack_bottom;
 
 extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
+extern void *Bstring(void *cstr);
 }
 
 enum VarDesignation {
@@ -175,6 +176,15 @@ bool Interpreter::step() {
     // CONST n
     case 0x0: {
       stack.pushIntOperand(readWord());
+      return true;
+    }
+    // 0x11 s:32
+    // STRING s
+    case 0x1: {
+      uint32_t offset = readWord();
+      const char *cstr = byteFile.getStringAt(offset);
+      Value string = reinterpret_cast<Value>(Bstring(const_cast<char *>(cstr)));
+      stack.pushOperand(string);
       return true;
     }
     // 0x15 l:32
