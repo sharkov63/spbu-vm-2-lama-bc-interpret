@@ -22,20 +22,25 @@ public:
   void pushIntOperand(int32_t operand);
   int32_t popIntOperand();
 
-  bool isEmpty() const { return baseStack.empty(); }
+  bool isEmpty() const { return frameStack.empty(); }
   bool isNotEmpty() const { return !isEmpty(); }
+
+  Value &accessLocal(int32_t index);
 
 private:
   void checkNonEmptyOperandStack() const;
 
+  struct Frame {
+    Value *base;
+    Value *top;
+    size_t nlocals;
+    size_t operandStackSize = 0;
+  };
+
 private:
   std::array<Value, STACK_SIZE> data;
-  Value *base;
-  Value *top;
-
-  size_t operandStackSize = 0;
-
-  std::vector<Value *> baseStack;
+  Frame frame;
+  std::vector<Frame> frameStack;
 };
 
 } // namespace lama

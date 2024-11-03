@@ -9,48 +9,48 @@ using namespace lama;
 //===----------------------------------------------------------------------===//
 
 Stack::Stack() {
-  top = data.end();
+  frame.top = frame.base = data.end();
   // __gc_stack_bottom = (size_t)top;
   // __gc_stack_top = __gc_stack_bottom;
 }
 
 void Stack::beginFunction(size_t nlocals) {
-  if (operandStackSize != 0) {
+  if (frame.operandStackSize != 0) {
     throw std::runtime_error(
         "non-empty operand stack upon beginning a function");
   }
-  baseStack.push_back(base);
-  base = top;
-  top -= nlocals;
+  frameStack.push_back(frame);
+  frame.base = frame.top;
+  frame.top = frame.base - nlocals;
+  frame.nlocals = nlocals;
+  frame.operandStackSize = 0;
   // Fill with boxed zeros so that GC will skip these
-  memset(top, 1, base - top);
+  memset(frame.top, 1, frame.base - frame.top);
 }
 
 void Stack::endFunction() {
-  if (baseStack.empty()) {
-    throw std::runtime_error("empty base stack at function end");
+  if (isEmpty()) {
+    throw std::runtime_error("no function to end");
   }
-  top = base;
-  base = baseStack.back();
-  baseStack.pop_back();
-  operandStackSize = 0;
+  frame = frameStack.back();
+  frameStack.pop_back();
 }
 
 void Stack::pushOperand(Value value) {
-  ++operandStackSize;
-  --top;
-  *top = value;
+  ++frame.operandStackSize;
+  --frame.top;
+  *frame.top = value;
 }
 
 Value Stack::peakOperand() const {
   checkNonEmptyOperandStack();
-  return *top;
+  return *frame.top;
 }
 
 Value Stack::popOperand() {
   checkNonEmptyOperandStack();
-  --operandStackSize;
-  return *(top++);
+  --frame.operandStackSize;
+  return *(frame.top++);
 }
 
 void Stack::pushIntOperand(int32_t operand) { pushOperand(boxInt(operand)); }
@@ -65,8 +65,17 @@ int32_t Stack::popIntOperand() {
   return unboxInt(operand);
 }
 
+Value &Stack::accessLocal(int32_t index) {
+  if (index < 0 || index >= frame.nlocals) {
+    throw std::runtime_error(fmt::format(
+        "access local variable out of bounds: index {} is not in [0, {})",
+        index, frame.nlocals));
+  }
+  return frame.base[-index];
+}
+
 void Stack::checkNonEmptyOperandStack() const {
-  if (operandStackSize == 0) {
+  if (frame.operandStackSize == 0) {
     throw std::runtime_error("cannot pop from empty operand stack");
   }
 }

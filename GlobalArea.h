@@ -13,7 +13,7 @@ public:
   GlobalArea(GlobalArea &&) = default;
   GlobalArea &operator=(GlobalArea &&) = default;
 
-  Value &accessGlobal(ssize_t index);
+  Value &accessGlobal(int32_t index);
 
 private:
   std::unique_ptr<Value[]> data;

@@ -21,6 +21,13 @@ extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
 }
 
+enum VarDesignation {
+  LOC_Global = 0x0,
+  LOC_Local = 0x1,
+  LOC_Arg = 0x2,
+  LOC_Access = 0x3,
+};
+
 enum Binop {
   BINOP_Add = 0x1,
   BINOP_Sub = 0x2,
@@ -54,6 +61,8 @@ private:
 
   char readByte();
   int32_t readWord();
+
+  Value &accessVar(char designation, int32_t index);
 
 private:
   ByteFile byteFile;
@@ -180,34 +189,22 @@ bool Interpreter::step() {
     }
     break;
   }
+  // 0x2d n:32
   // LD
   case 0x2: {
-    switch (low) {
-    // 0x20 n:32
-    // LD G(n)
-    case 0x0: {
-      int32_t globalIndex = readWord();
-      Value &global = globalArea->accessGlobal(globalIndex);
-      stack.pushOperand(global);
-      return true;
-    }
-    }
-    break;
+    int32_t index = readWord();
+    Value &var = accessVar(low, index);
+    stack.pushOperand(var);
+    return true;
   }
+  // 0x4d n:32
   // ST
   case 0x4: {
-    switch (low) {
-    // 0x40 n:32
-    // ST G(n)
-    case 0x0: {
-      int32_t globalIndex = readWord();
-      Value &global = globalArea->accessGlobal(globalIndex);
-      Value operand = stack.peakOperand();
-      global = operand;
-      return true;
-    }
-    }
-    break;
+    int32_t index = readWord();
+    Value &var = accessVar(low, index);
+    Value operand = stack.peakOperand();
+    var = operand;
+    return true;
   }
   case 0x5: {
     switch (low) {
@@ -252,11 +249,23 @@ bool Interpreter::step() {
 }
 
 char Interpreter::readByte() { return *instructionPointer++; }
+
 int32_t Interpreter::readWord() {
   int32_t word;
   memcpy(&word, instructionPointer, sizeof(int32_t));
   instructionPointer += sizeof(int32_t);
   return word;
+}
+
+Value &Interpreter::accessVar(char designation, int32_t index) {
+  switch (designation) {
+  case LOC_Global:
+    return globalArea->accessGlobal(index);
+  case LOC_Local:
+    return stack.accessLocal(index);
+  }
+  throw std::runtime_error(
+      fmt::format("unsupported variable designation {:#x}", designation));
 }
 
 void lama::interpret(ByteFile byteFile) {

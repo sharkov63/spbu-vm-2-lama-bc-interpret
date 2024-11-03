@@ -11,7 +11,7 @@ using namespace lama;
 GlobalArea::GlobalArea(size_t sizeWords)
     : data(new Value[sizeWords]), sizeWords(sizeWords) {}
 
-Value &GlobalArea::accessGlobal(ssize_t index) {
+Value &GlobalArea::accessGlobal(int32_t index) {
   if (index < 0 || index >= sizeWords) {
     throw std::runtime_error(
         fmt::format("access out of global area bounds: {} is not in [0, {})",
