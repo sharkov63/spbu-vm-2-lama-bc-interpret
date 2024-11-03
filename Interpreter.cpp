@@ -19,6 +19,8 @@ extern size_t __gc_stack_top, __gc_stack_bottom;
 
 extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
+extern int32_t Llength(void *p);
+
 extern void *Bstring(void *cstr);
 }
 
@@ -279,6 +281,14 @@ bool Interpreter::step() {
     case 0x1: {
       Lwrite(stack.popOperand());
       stack.pushIntOperand(0);
+      return true;
+    }
+    // 0x72
+    // CALL Llength
+    case 0x2: {
+      Value stringValue = stack.popOperand();
+      Value lengthValue = Llength(reinterpret_cast<void *>(stringValue));
+      stack.pushOperand(lengthValue);
       return true;
     }
     }
