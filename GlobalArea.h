@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Value.h"
 #include <cstdlib>
 #include <memory>
 
@@ -12,10 +13,10 @@ public:
   GlobalArea(GlobalArea &&) = default;
   GlobalArea &operator=(GlobalArea &&) = default;
 
-  int32_t &accessGlobal(ssize_t index);
+  Value &accessGlobal(ssize_t index);
 
 private:
-  std::unique_ptr<int32_t[]> data;
+  std::unique_ptr<Value[]> data;
   size_t sizeWords;
 };
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Value.h"
 #include <array>
 #include <cstdlib>
 #include <vector>
@@ -13,21 +14,23 @@ public:
   Stack();
 
   void beginFunction(size_t nlocals);
-  void pushOperand(int32_t value);
-  int32_t peakOperand() const;
-  int32_t popOperand();
+  void pushOperand(Value operand);
+  Value peakOperand() const;
+  Value popOperand();
+  void pushIntOperand(int32_t operand);
+  int32_t popIntOperand();
 
 private:
   void checkNonEmptyOperandStack() const;
 
 private:
-  std::array<int32_t, STACK_SIZE> data;
-  int32_t *base;
-  int32_t *top;
+  std::array<Value, STACK_SIZE> data;
+  Value *base;
+  Value *top;
 
   size_t operandStackSize = 0;
 
-  std::vector<int32_t *> baseStack;
+  std::vector<Value *> baseStack;
 };
 
 } // namespace lama

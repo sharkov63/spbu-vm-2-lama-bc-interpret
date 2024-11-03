@@ -25,21 +25,33 @@ void Stack::beginFunction(size_t nlocals) {
   memset(top, 1, base - top);
 }
 
-void Stack::pushOperand(int32_t value) {
+void Stack::pushOperand(Value value) {
   ++operandStackSize;
   --top;
   *top = value;
 }
 
-int32_t Stack::peakOperand() const {
+Value Stack::peakOperand() const {
   checkNonEmptyOperandStack();
   return *top;
 }
 
-int32_t Stack::popOperand() {
+Value Stack::popOperand() {
   checkNonEmptyOperandStack();
   --operandStackSize;
   return *(top++);
+}
+
+void Stack::pushIntOperand(int32_t operand) { pushOperand(boxInt(operand)); }
+
+int32_t Stack::popIntOperand() {
+  Value operand = popOperand();
+  if (!valueIsInt(operand)) {
+    throw std::runtime_error(fmt::format(
+        "expected a (boxed) number at the operand stack top, found {:#x}",
+        operand));
+  }
+  return unboxInt(operand);
 }
 
 void Stack::checkNonEmptyOperandStack() const {
