@@ -27,6 +27,7 @@ public:
   bool isNotEmpty() const { return !isEmpty(); }
 
   Value &accessLocal(ssize_t index);
+  Value &accessArg(ssize_t index);
 
   void setNextReturnAddress(const char *address) {
     nextReturnAddress = address;

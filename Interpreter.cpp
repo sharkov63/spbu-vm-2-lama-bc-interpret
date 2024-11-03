@@ -297,6 +297,8 @@ Value &Interpreter::accessVar(char designation, int32_t index) {
     return globalArea->accessGlobal(index);
   case LOC_Local:
     return stack.accessLocal(index);
+  case LOC_Arg:
+    return stack.accessArg(index);
   }
   throw std::runtime_error(
       fmt::format("unsupported variable designation {:#x}", designation));

@@ -30,6 +30,7 @@ void Stack::beginFunction(size_t nargs, size_t nlocals) {
   frameStack.push_back(frame);
   frame.base = newBase;
   frame.top = frame.base - nlocals;
+  frame.nargs = nargs;
   frame.nlocals = nlocals;
   frame.operandStackSize = 0;
   frame.returnAddress = nextReturnAddress;
@@ -83,13 +84,22 @@ int32_t Stack::popIntOperand() {
   return unboxInt(operand);
 }
 
-Value &Stack::accessLocal(int32_t index) {
+Value &Stack::accessLocal(ssize_t index) {
   if (index < 0 || index >= frame.nlocals) {
     throw std::runtime_error(fmt::format(
         "access local variable out of bounds: index {} is not in [0, {})",
         index, frame.nlocals));
   }
   return frame.base[-index - 1];
+}
+
+Value &Stack::accessArg(ssize_t index) {
+  if (index < 0 || index >= frame.nargs) {
+    throw std::runtime_error(
+        fmt::format("access argument out of bounds: index {} is not in [0, {})",
+                    index, frame.nargs));
+  }
+  return frame.base[frame.nargs - 1 - index];
 }
 
 void Stack::checkNonEmptyOperandStack() const {
