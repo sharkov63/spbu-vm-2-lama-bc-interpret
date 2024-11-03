@@ -157,6 +157,12 @@ void Interpreter::step() {
   }
   case 0x1: {
     switch (low) {
+    // 0x10 n:32
+    // CONST n
+    case 0x0: {
+      stack.pushIntOperand(readWord());
+      return;
+    }
     // 0x18
     // DROP
     case 0x8: {
