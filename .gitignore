@@ -1,0 +1,8 @@
+build
+.clangd
+compile_commands.json
+*.o
+YAILama
+compile_flags.txt
+env.sh
+.cache

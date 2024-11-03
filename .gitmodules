@@ -1,0 +1,7 @@
+[submodule "fmt"]
+	path = fmt
+	url = git@github.com:fmtlib/fmt.git
+[submodule "Lama"]
+	path = Lama
+	url = git@github.com:PLTools/Lama.git
+	branch = 1.20
