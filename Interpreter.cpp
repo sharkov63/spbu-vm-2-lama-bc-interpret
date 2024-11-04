@@ -27,6 +27,8 @@ extern int LtagHash(char *tagString);
 extern void *Bsexp(int bn, ...);
 extern void *Bsexp_(void *stack_top, int n);
 extern int Btag(void *d, int t, int n);
+[[noreturn]] extern void Bmatch_failure(void *v, char *fname, int line,
+                                        int col);
 }
 
 enum VarDesignation {
@@ -73,6 +75,8 @@ static Value createSexp(size_t nargs) {
   gcUpdateStack();
   return reinterpret_cast<Value>(Bsexp_(stack.getTop(), nargs));
 }
+
+static const char unknownFile[] = "<unknown file>";
 
 namespace {
 
@@ -352,10 +356,19 @@ bool Interpreter::step() {
       Value tag = LtagHash(const_cast<char *>(string));
       Value target = stack.popOperand();
 
-      Value result = Btag((void *)target, tag, nargs);
+      Value result = Btag((void *)target, tag, boxInt(nargs));
 
       stack.pushOperand(result);
       return true;
+    }
+    // 0x59 l:32 c:32
+    // FAIL l c
+    case 0x9: {
+      uint32_t line = readWord();
+      uint32_t col = readWord();
+      Value v = stack.popOperand();
+      Bmatch_failure((void *)v, const_cast<char *>(unknownFile), line,
+                     col); // noreturn
     }
     // 0x5a n:32
     // LINE n
