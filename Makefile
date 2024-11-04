@@ -32,7 +32,10 @@ Barray_.o: Barray_.s
 Bsexp_.o: Bsexp_.s
 	$(CC) -o $@ $(INTERPRETER_FLAGS) -c Bsexp_.s
 
-YAILama: Main.o GlobalArea.o ByteFile.o Stack.o Interpreter.o Barray_.o Bsexp_.o
+Bclosure_.o: Bclosure_.s
+	$(CC) -o $@ $(INTERPRETER_FLAGS) -c Bclosure_.s
+
+YAILama: Main.o GlobalArea.o ByteFile.o Stack.o Interpreter.o Barray_.o Bsexp_.o Bclosure_.o
 	$(CXX) -o $@ $(INTERPRETER_FLAGS) Lama/runtime/runtime.o Lama/runtime/gc.o $^
 
 clean:

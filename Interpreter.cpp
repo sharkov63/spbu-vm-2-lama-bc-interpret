@@ -30,6 +30,8 @@ extern void *Bsexp_(void *stack_top, int n);
 extern int Btag(void *d, int t, int n);
 [[noreturn]] extern void Bmatch_failure(void *v, char *fname, int line,
                                         int col);
+extern void *Bclosure(int bn, void *entry, ...);
+extern void *Bclosure_(void *stack_top, int n, void *entry);
 }
 
 enum VarDesignation {
@@ -80,6 +82,12 @@ static Value createArray(size_t nargs) {
 static Value createSexp(size_t nargs) {
   gcUpdateStack();
   return reinterpret_cast<Value>(Bsexp_(stack.getTop(), nargs));
+}
+
+static Value createClosure(const char *entry, size_t nvars) {
+  gcUpdateStack();
+  return reinterpret_cast<Value>(
+      Bclosure_(stack.getTop(), nvars, const_cast<char *>(entry)));
 }
 
 static const char unknownFile[] = "<unknown file>";
@@ -152,6 +160,14 @@ bool Interpreter::step() {
   switch (high) {
   // BINOP
   case 0x0: {
+    if (low == BINOP_Eq) {
+      Value rhs = stack.popOperand();
+      Value lhs = stack.popOperand();
+      Value result = boxInt(lhs == rhs);
+      stack.pushOperand(result);
+      return true;
+    }
+
     int32_t rhs = stack.popIntOperand();
     int32_t lhs = stack.popIntOperand();
     if ((low == BINOP_Div || low == BINOP_Mod) && rhs == 0)
@@ -192,10 +208,6 @@ bool Interpreter::step() {
     }
     case BINOP_Geq: {
       result = lhs >= rhs;
-      break;
-    }
-    case BINOP_Eq: {
-      result = lhs == rhs;
       break;
     }
     case BINOP_Neq: {
@@ -358,6 +370,31 @@ bool Interpreter::step() {
       uint32_t nargs = readWord();
       uint32_t nlocals = readWord();
       stack.beginFunction(nargs, nlocals);
+      return true;
+    }
+    // 0x54 l:32 n:32 d*:32 *
+    // CLOSURE
+    case 0x4: {
+      uint32_t entryOffset = readWord();
+      uint32_t n = readWord();
+
+      const char *entry = byteFile.getAddressFor(entryOffset);
+
+      std::vector<Value> values;
+      for (int i = 0; i < n; ++i) {
+        char designation = readByte();
+        uint32_t index = readWord();
+        Value value = accessVar(designation, index);
+        values.push_back(value);
+      }
+      std::reverse(values.begin(), values.end());
+      for (Value value : values)
+        stack.pushOperand(value);
+
+      Value closure = createClosure(entry, n);
+
+      stack.popNOperands(n);
+      stack.pushOperand(closure);
       return true;
     }
     // 0x56 l:32 n:32
