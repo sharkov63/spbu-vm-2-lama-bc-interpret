@@ -27,6 +27,9 @@ extern void *Bstring(void *cstr);
 extern void *Bsta(void *v, int i, void *x);
 extern void *Barray(int bn, ...);
 extern void *Barray_(void *stack_top, int n);
+extern int LtagHash(char *tagString);
+extern void *Bsexp(int bn, ...);
+extern void *Bsexp_(void *stack_top, int n);
 }
 
 enum VarDesignation {
@@ -189,6 +192,31 @@ bool Interpreter::step() {
       const char *cstr = byteFile.getStringAt(offset);
       Value string = reinterpret_cast<Value>(Bstring(const_cast<char *>(cstr)));
       stack.pushOperand(string);
+      return true;
+    }
+    // 0x12 s:32 n:32
+    // SEXP s n
+    case 0x2: {
+      Value stringOffset = readWord();
+      uint32_t nargs = readWord();
+      if (stack.getOperandStackSize() < nargs) {
+        runtimeError("cannot construct sexp of {} elements: operand stack "
+                     "size is only {}",
+                     nargs, stack.getOperandStackSize());
+      }
+      const char *string = byteFile.getStringAt(stringOffset);
+      Value tagHash = LtagHash(const_cast<char *>(string));
+      std::reverse(stack.getTop(), stack.getTop() + nargs);
+      Value *base = stack.getTop() - 1;
+      for (int i = 0; i < nargs; ++i) {
+        base[i] = base[i + 1];
+      }
+      base[nargs] = tagHash;
+
+      Value sexp = (Value)Bsexp_(base, nargs);
+
+      stack.popNOperands(nargs);
+      stack.pushOperand(sexp);
       return true;
     }
     // 0x14
