@@ -22,6 +22,7 @@ public:
   Value popOperand();
   void pushIntOperand(int32_t operand);
   int32_t popIntOperand();
+  void popNOperands(size_t noperands);
 
   bool isEmpty() const { return frameStack.empty(); }
   bool isNotEmpty() const { return !isEmpty(); }
@@ -32,6 +33,9 @@ public:
   void setNextReturnAddress(const char *address) {
     nextReturnAddress = address;
   }
+
+  Value *getTop() { return frame.top; }
+  size_t getOperandStackSize() const { return frame.operandStackSize; }
 
 private:
   void checkNonEmptyOperandStack() const;

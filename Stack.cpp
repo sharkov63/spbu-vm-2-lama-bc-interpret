@@ -1,7 +1,7 @@
 #include "Stack.h"
+#include "Error.h"
 #include <cstring>
 #include <iostream>
-#include <stdexcept>
 
 using namespace lama;
 
@@ -20,9 +20,8 @@ Stack::Stack() {
 
 void Stack::beginFunction(size_t nargs, size_t nlocals) {
   if (frame.operandStackSize != nargs) {
-    throw std::runtime_error(
-        fmt::format("expected {} arguments, but found operand stack of size {}",
-                    nargs, frame.operandStackSize));
+    runtimeError("expected {} arguments, but found operand stack of size {}",
+                 nargs, frame.operandStackSize);
   }
   Value *newBase = frame.top;
   frame.operandStackSize = 0;
@@ -40,12 +39,12 @@ void Stack::beginFunction(size_t nargs, size_t nlocals) {
 
 const char *Stack::endFunction() {
   if (isEmpty()) {
-    throw std::runtime_error("no function to end");
+    runtimeError("no function to end");
   }
   if (frame.operandStackSize != 1) {
-    throw std::runtime_error(fmt::format(
+    runtimeError(
         "attempt to end function with operand stack size {}, expected 1",
-        frame.operandStackSize));
+        frame.operandStackSize);
   }
   Value top = *frame.top;
   const char *returnAddress = frame.returnAddress;
@@ -77,33 +76,41 @@ void Stack::pushIntOperand(int32_t operand) { pushOperand(boxInt(operand)); }
 int32_t Stack::popIntOperand() {
   Value operand = popOperand();
   if (!valueIsInt(operand)) {
-    throw std::runtime_error(fmt::format(
+    runtimeError(
         "expected a (boxed) number at the operand stack top, found {:#x}",
-        operand));
+        operand);
   }
   return unboxInt(operand);
 }
 
+void Stack::popNOperands(size_t noperands) {
+  if (frame.operandStackSize < noperands) {
+    runtimeError("cannot pop {} operands because operand stack size is {}",
+                 noperands, frame.operandStackSize);
+  }
+  frame.operandStackSize -= noperands;
+  frame.top += noperands;
+}
+
 Value &Stack::accessLocal(ssize_t index) {
   if (index < 0 || index >= frame.nlocals) {
-    throw std::runtime_error(fmt::format(
+    runtimeError(
         "access local variable out of bounds: index {} is not in [0, {})",
-        index, frame.nlocals));
+        index, frame.nlocals);
   }
   return frame.base[-index - 1];
 }
 
 Value &Stack::accessArg(ssize_t index) {
   if (index < 0 || index >= frame.nargs) {
-    throw std::runtime_error(
-        fmt::format("access argument out of bounds: index {} is not in [0, {})",
-                    index, frame.nargs));
+    runtimeError("access argument out of bounds: index {} is not in [0, {})",
+                 index, frame.nargs);
   }
   return frame.base[frame.nargs - 1 - index];
 }
 
 void Stack::checkNonEmptyOperandStack() const {
   if (frame.operandStackSize == 0) {
-    throw std::runtime_error("cannot pop from empty operand stack");
+    runtimeError("cannot pop from empty operand stack");
   }
 }

@@ -20,10 +20,13 @@ extern size_t __gc_stack_top, __gc_stack_bottom;
 extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
 extern int32_t Llength(void *p);
+extern void *Lstring(void *);
 
 extern void *Belem(void *p, int i);
 extern void *Bstring(void *cstr);
 extern void *Bsta(void *v, int i, void *x);
+extern void *Barray(int bn, ...);
+extern void *Barray_(void *stack_top, int n);
 }
 
 enum VarDesignation {
@@ -313,6 +316,21 @@ bool Interpreter::step() {
       Value string = stack.popOperand();
       Value length = Llength(reinterpret_cast<void *>(string));
       stack.pushOperand(length);
+      return true;
+    }
+    // 0x74 n:32
+    // CALL Barray n:32
+    case 0x4: {
+      uint32_t nargs = readWord();
+      if (stack.getOperandStackSize() < nargs) {
+        runtimeError("cannot construct array of {} elements: operand stack "
+                     "size is only {}",
+                     nargs, stack.getOperandStackSize());
+      }
+      std::reverse(stack.getTop(), stack.getTop() + nargs);
+      Value array = reinterpret_cast<Value>(Barray_(stack.getTop(), nargs));
+      stack.popNOperands(nargs);
+      stack.pushOperand(array);
       return true;
     }
     }

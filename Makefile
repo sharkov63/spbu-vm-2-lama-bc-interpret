@@ -26,7 +26,10 @@ Stack.o: Stack.cpp Stack.h
 Interpreter.o: Interpreter.cpp Interpreter.h
 	$(CXX) -o $@ $(INTERPRETER_FLAGS) -c Interpreter.cpp
 
-YAILama: Main.o GlobalArea.o ByteFile.o Stack.o Interpreter.o
+Barray_.o: Barray_.s
+	$(CC) -o $@ $(INTERPRETER_FLAGS) -c Barray_.s
+
+YAILama: Main.o GlobalArea.o ByteFile.o Stack.o Interpreter.o Barray_.o
 	$(CXX) -o $@ $(INTERPRETER_FLAGS) Lama/runtime/runtime.o Lama/runtime/gc.o $^
 
 clean:
