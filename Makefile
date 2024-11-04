@@ -37,6 +37,7 @@ YAILama: Main.o GlobalArea.o ByteFile.o Stack.o Interpreter.o Barray_.o Bsexp_.o
 
 clean:
 	$(RM) *.a *.o *~ YAILama
+	$(MAKE) clean -C Lama/runtime
 
 test_regression: YAILama $(REGRESSION_TESTS)
 

@@ -5,6 +5,11 @@
 
 using namespace lama;
 
+extern "C" {
+
+extern size_t __gc_stack_top, __gc_stack_bottom;
+}
+
 //===----------------------------------------------------------------------===//
 // Stack
 //===----------------------------------------------------------------------===//
@@ -14,8 +19,6 @@ Stack::Stack() {
   // Two arguments to main: argc and argv
   frame.top = frame.base - 2;
   frame.operandStackSize = 2;
-  // __gc_stack_bottom = (size_t)top;
-  // __gc_stack_top = __gc_stack_bottom;
 }
 
 void Stack::beginFunction(size_t nargs, size_t nlocals) {
@@ -29,11 +32,12 @@ void Stack::beginFunction(size_t nargs, size_t nlocals) {
   frameStack.push_back(frame);
   frame.base = newBase;
   frame.top = frame.base - nlocals;
+  __gc_stack_top = reinterpret_cast<size_t>(frame.top);
   frame.nargs = nargs;
   frame.nlocals = nlocals;
   frame.operandStackSize = 0;
   frame.returnAddress = nextReturnAddress;
-  // Fill with boxed zeros so that GC will skip these
+  // Fill with some boxed values so that GC will skip these
   memset(frame.top, 1, frame.base - frame.top);
 }
 
@@ -57,6 +61,7 @@ const char *Stack::endFunction() {
 void Stack::pushOperand(Value value) {
   ++frame.operandStackSize;
   --frame.top;
+  __gc_stack_top = reinterpret_cast<size_t>(frame.top);
   *frame.top = value;
 }
 
@@ -68,7 +73,10 @@ Value Stack::peakOperand() const {
 Value Stack::popOperand() {
   checkNonEmptyOperandStack();
   --frame.operandStackSize;
-  return *(frame.top++);
+  Value operand = *frame.top;
+  frame.top++;
+  __gc_stack_top = reinterpret_cast<size_t>(frame.top);
+  return operand;
 }
 
 void Stack::pushIntOperand(int32_t operand) { pushOperand(boxInt(operand)); }
@@ -90,6 +98,7 @@ void Stack::popNOperands(size_t noperands) {
   }
   frame.operandStackSize -= noperands;
   frame.top += noperands;
+  __gc_stack_top = reinterpret_cast<size_t>(frame.top);
 }
 
 Value &Stack::accessLocal(ssize_t index) {

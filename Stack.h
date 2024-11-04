@@ -35,6 +35,7 @@ public:
   }
 
   Value *getTop() { return frame.top; }
+  Value *getBottom() { return data.end(); }
   size_t getOperandStackSize() const { return frame.operandStackSize; }
 
 private:

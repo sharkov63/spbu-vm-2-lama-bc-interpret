@@ -10,12 +10,9 @@ using namespace lama;
 
 extern "C" {
 
-void __gc_init();
-
-void *__start_custom_data;
-void *__stop_custom_data;
-
 extern size_t __gc_stack_top, __gc_stack_bottom;
+
+void __gc_init();
 
 extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
@@ -30,6 +27,7 @@ extern void *Barray_(void *stack_top, int n);
 extern int LtagHash(char *tagString);
 extern void *Bsexp(int bn, ...);
 extern void *Bsexp_(void *stack_top, int n);
+extern int Btag(void *d, int t, int n);
 }
 
 enum VarDesignation {
@@ -91,6 +89,8 @@ Interpreter::Interpreter(ByteFile byteFile)
 
 void Interpreter::run() {
   __gc_init();
+  __gc_stack_bottom = (size_t)(stack.getBottom() - 2);
+  __gc_stack_top = (size_t)stack.getTop();
   while (true) {
     const char *currentInstruction = instructionPointer;
     try {
@@ -106,6 +106,8 @@ void Interpreter::run() {
 bool Interpreter::step() {
   // std::cerr << fmt::format("interpreting at {:#x}\n",
   //                          instructionPointer - byteFile.getCode());
+  // std::cerr << fmt::format("stack range [{}, {})\n", fmt::ptr(stack.getTop()),
+  //                          fmt::ptr(stack.getBottom()));
   char byte = readByte();
   char high = (0xF0 & byte) >> 4;
   char low = 0x0F & byte;
@@ -207,7 +209,8 @@ bool Interpreter::step() {
       const char *string = byteFile.getStringAt(stringOffset);
       Value tagHash = LtagHash(const_cast<char *>(string));
       std::reverse(stack.getTop(), stack.getTop() + nargs);
-      Value *base = stack.getTop() - 1;
+      stack.pushOperand(0);
+      Value *base = stack.getTop();
       for (int i = 0; i < nargs; ++i) {
         base[i] = base[i + 1];
       }
@@ -215,7 +218,7 @@ bool Interpreter::step() {
 
       Value sexp = (Value)Bsexp_(base, nargs);
 
-      stack.popNOperands(nargs);
+      stack.popNOperands(nargs + 1);
       stack.pushOperand(sexp);
       return true;
     }
@@ -318,6 +321,20 @@ bool Interpreter::step() {
       readWord();
       stack.setNextReturnAddress(instructionPointer);
       instructionPointer = address;
+      return true;
+    }
+    // 0x57 s:32 n:32
+    // TAG s n
+    case 0x7: {
+      uint32_t stringOffset = readWord();
+      uint32_t nargs = readWord();
+      const char *string = byteFile.getStringAt(stringOffset);
+      Value tag = LtagHash(const_cast<char *>(string));
+      Value target = stack.popOperand();
+
+      Value result = Btag((void *)target, tag, nargs);
+
+      stack.pushOperand(result);
       return true;
     }
     // 0x5a n:32
