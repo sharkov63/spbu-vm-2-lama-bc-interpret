@@ -253,6 +253,12 @@ bool Interpreter::step() {
       stack.popOperand();
       return true;
     }
+    // 0x19
+    // DUP
+    case 0x9: {
+      stack.pushOperand(stack.peakOperand());
+      return true;
+    }
     // 0x1b
     // ELEM
     case 0xb: {
