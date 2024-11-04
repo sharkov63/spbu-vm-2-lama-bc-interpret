@@ -17,7 +17,6 @@ void __gc_init();
 extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
 extern int32_t Llength(void *p);
-extern void *Lstring(void *);
 
 extern void *Belem(void *p, int i);
 extern void *Bstring(void *cstr);
@@ -53,9 +52,29 @@ enum Binop {
   BINOP_Or = 0xd,
 };
 
-namespace {
+static Stack stack;
 
-Stack stack;
+static void gcUpdateStack() {
+  __gc_stack_top = reinterpret_cast<size_t>(stack.getTop() - 1);
+  __gc_stack_bottom = reinterpret_cast<size_t>(stack.getBottom());
+}
+
+static Value createString(const char *cstr) {
+  gcUpdateStack();
+  return reinterpret_cast<Value>(Bstring(const_cast<char *>(cstr)));
+}
+
+static Value createArray(size_t nargs) {
+  gcUpdateStack();
+  return reinterpret_cast<Value>(Barray_(stack.getTop(), nargs));
+}
+
+static Value createSexp(size_t nargs) {
+  gcUpdateStack();
+  return reinterpret_cast<Value>(Bsexp_(stack.getTop(), nargs));
+}
+
+namespace {
 
 class Interpreter {
 public:
@@ -106,7 +125,8 @@ void Interpreter::run() {
 bool Interpreter::step() {
   // std::cerr << fmt::format("interpreting at {:#x}\n",
   //                          instructionPointer - byteFile.getCode());
-  // std::cerr << fmt::format("stack range [{}, {})\n", fmt::ptr(stack.getTop()),
+  // std::cerr << fmt::format("stack range [{}, {})\n",
+  // fmt::ptr(stack.getTop()),
   //                          fmt::ptr(stack.getBottom()));
   char byte = readByte();
   char high = (0xF0 & byte) >> 4;
@@ -192,7 +212,7 @@ bool Interpreter::step() {
     case 0x1: {
       uint32_t offset = readWord();
       const char *cstr = byteFile.getStringAt(offset);
-      Value string = reinterpret_cast<Value>(Bstring(const_cast<char *>(cstr)));
+      Value string = createString(cstr);
       stack.pushOperand(string);
       return true;
     }
@@ -216,7 +236,7 @@ bool Interpreter::step() {
       }
       base[nargs] = tagHash;
 
-      Value sexp = (Value)Bsexp_(base, nargs);
+      Value sexp = createSexp(nargs);
 
       stack.popNOperands(nargs + 1);
       stack.pushOperand(sexp);
@@ -379,7 +399,7 @@ bool Interpreter::step() {
                      nargs, stack.getOperandStackSize());
       }
       std::reverse(stack.getTop(), stack.getTop() + nargs);
-      Value array = reinterpret_cast<Value>(Barray_(stack.getTop(), nargs));
+      Value array = createArray(nargs);
       stack.popNOperands(nargs);
       stack.pushOperand(array);
       return true;
