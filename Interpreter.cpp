@@ -32,6 +32,13 @@ extern int Btag(void *d, int t, int n);
                                         int col);
 extern void *Bclosure(int bn, void *entry, ...);
 extern void *Bclosure_(void *stack_top, int n, void *entry);
+extern int Bstring_patt(void *x, void *y);
+extern int Bclosure_tag_patt(void *x);
+extern int Bboxed_patt(void *x);
+extern int Bunboxed_patt(void *x);
+extern int Barray_tag_patt(void *x);
+extern int Bstring_tag_patt(void *x);
+extern int Bsexp_tag_patt(void *x);
 }
 
 enum VarDesignation {
@@ -445,6 +452,74 @@ bool Interpreter::step() {
     case 0xa: {
       readWord();
       return true;
+    }
+    }
+    break;
+  }
+  // 0x6p
+  // PATT p
+  case 0x6: {
+    switch (low) {
+    // 0x60
+    // PATT StrCmp
+    case 0x0: {
+      Value x = stack.popOperand();
+      Value y = stack.popOperand();
+      Value result = Bstring_patt(reinterpret_cast<void *>(x),
+                                  reinterpret_cast<void *>(y));
+      stack.pushOperand(result);
+      return true;
+    }
+    // 0x61
+    // PATT String
+    case 0x1: {
+      Value operand = stack.popOperand();
+      Value result = Bstring_tag_patt(reinterpret_cast<void *>(operand));
+      stack.pushOperand(result);
+      return true;
+    }
+    // 0x62
+    // PATT Array
+    case 0x2: {
+      Value operand = stack.popOperand();
+      Value result = Barray_tag_patt(reinterpret_cast<void *>(operand));
+      stack.pushOperand(result);
+      return true;
+    }
+    // 0x63
+    // PATT Sexp
+    case 0x3: {
+      Value operand = stack.popOperand();
+      Value result = Bsexp_tag_patt(reinterpret_cast<void *>(operand));
+      stack.pushOperand(result);
+      return true;
+    }
+    // 0x64
+    // PATT Boxed
+    case 0x4: {
+      Value operand = stack.popOperand();
+      Value result = Bboxed_patt(reinterpret_cast<void *>(operand));
+      stack.pushOperand(result);
+      return true;
+    }
+    // 0x65
+    // PATT UnBoxed
+    case 0x5: {
+      Value operand = stack.popOperand();
+      Value result = Bunboxed_patt(reinterpret_cast<void *>(operand));
+      stack.pushOperand(result);
+      return true;
+    }
+    // 0x66
+    // PATT Closure
+    case 0x6: {
+      Value operand = stack.popOperand();
+      Value result = Bclosure_tag_patt(reinterpret_cast<void *>(operand));
+      stack.pushOperand(result);
+      return true;
+    }
+    default: {
+      runtimeError("unsupported pattern kind {:#x}", low);
     }
     }
     break;
