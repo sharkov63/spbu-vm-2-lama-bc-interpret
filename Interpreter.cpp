@@ -138,6 +138,14 @@ bool Interpreter::step() {
   // std::cerr << fmt::format("stack range [{}, {})\n",
   // fmt::ptr(stack.getTop()),
   //                          fmt::ptr(stack.getBottom()));
+  // if (stack.getOperandStackSize()) {
+  //   std::cerr << fmt::format("operand stack:\n");
+  //   for (int i = 0; i < stack.getOperandStackSize(); ++i) {
+  //     std::cerr << fmt::format("operand {}: ", i);
+  //     Value element = stack.getTop()[i];
+  //     renderToString(element);
+  //   }
+  // }
   char byte = readByte();
   char high = (0xF0 & byte) >> 4;
   char low = 0x0F & byte;
@@ -311,6 +319,15 @@ bool Interpreter::step() {
     int32_t index = readWord();
     Value &var = accessVar(low, index);
     stack.pushOperand(var);
+    return true;
+  }
+  // 0x3d n:32
+  // LDA
+  case 0x3: {
+    int32_t index = readWord();
+    Value *address = &accessVar(low, index);
+    stack.pushOperand(reinterpret_cast<Value>(address));
+    stack.pushOperand(reinterpret_cast<Value>(address));
     return true;
   }
   // 0x4d n:32
