@@ -17,6 +17,7 @@ void __gc_init();
 extern Value Lread();
 extern int32_t Lwrite(Value boxedInt);
 extern int32_t Llength(void *p);
+extern void *Lstring(void *p);
 
 extern void *Belem(void *p, int i);
 extern void *Bstring(void *cstr);
@@ -59,6 +60,11 @@ static Stack stack;
 static void gcUpdateStack() {
   __gc_stack_top = reinterpret_cast<size_t>(stack.getTop() - 1);
   __gc_stack_bottom = reinterpret_cast<size_t>(stack.getBottom());
+}
+
+static Value renderToString(Value value) {
+  gcUpdateStack();
+  return reinterpret_cast<Value>(Lstring(reinterpret_cast<void *>(value)));
 }
 
 static Value createString(const char *cstr) {
@@ -400,6 +406,14 @@ bool Interpreter::step() {
       Value string = stack.popOperand();
       Value length = Llength(reinterpret_cast<void *>(string));
       stack.pushOperand(length);
+      return true;
+    }
+    // 0x73
+    // CALL Lstring
+    case 0x3: {
+      Value operand = stack.popOperand();
+      Value rendered = renderToString(operand);
+      stack.pushOperand(rendered);
       return true;
     }
     // 0x74 n:32
