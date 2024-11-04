@@ -397,6 +397,16 @@ bool Interpreter::step() {
       stack.pushOperand(closure);
       return true;
     }
+    // 0x55 n:32
+    // CALLC nargs
+    case 0x5: {
+      readWord();
+      Value closure = stack.popOperand();
+      const char *entry = *reinterpret_cast<const char **>(closure);
+      stack.setNextReturnAddress(instructionPointer);
+      instructionPointer = entry;
+      return true;
+    }
     // 0x56 l:32 n:32
     // CALL address nargs
     case 0x6: {
