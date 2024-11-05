@@ -17,12 +17,12 @@ Stack::Stack() {
 }
 
 void Stack::beginFunction(size_t nargs, size_t nlocals) {
-  if (frame.operandStackSize != nargs) {
+  if (frame.operandStackSize < nargs) {
     runtimeError("expected {} arguments, but found operand stack of size {}",
                  nargs, frame.operandStackSize);
   }
   Value *newBase = frame.top;
-  frame.operandStackSize = 0;
+  frame.operandStackSize -= nargs;
   frame.top += nargs;
   frameStack.push_back(frame);
   frame.base = newBase;
@@ -48,7 +48,7 @@ const char *Stack::endFunction() {
   const char *returnAddress = frame.returnAddress;
   frame = frameStack.back();
   frameStack.pop_back();
-  pushIntOperand(top);
+  pushOperand(top);
   return returnAddress;
 }
 

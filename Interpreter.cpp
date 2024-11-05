@@ -150,9 +150,6 @@ void Interpreter::run() {
 bool Interpreter::step() {
   // std::cerr << fmt::format("interpreting at {:#x}\n",
   //                          instructionPointer - byteFile.getCode());
-  // std::cerr << fmt::format("stack range [{}, {})\n",
-  // fmt::ptr(stack.getTop()),
-  //                          fmt::ptr(stack.getBottom()));
   // if (stack.getOperandStackSize()) {
   //   std::cerr << fmt::format("operand stack:\n");
   //   for (int i = 0; i < stack.getOperandStackSize(); ++i) {
