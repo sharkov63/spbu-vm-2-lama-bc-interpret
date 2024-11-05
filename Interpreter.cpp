@@ -119,7 +119,6 @@ private:
 
 private:
   ByteFile byteFile;
-  std::shared_ptr<GlobalArea> globalArea;
 
   const char *instructionPointer;
 } interpreter;
@@ -128,8 +127,7 @@ private:
 
 Interpreter::Interpreter(ByteFile byteFile)
     : byteFile(std::move(byteFile)),
-      instructionPointer(this->byteFile.getCode()),
-      globalArea(this->byteFile.getGlobalArea()) {}
+      instructionPointer(this->byteFile.getCode()) {}
 
 void Interpreter::run() {
   __gc_init();
@@ -153,9 +151,9 @@ bool Interpreter::step() {
   // if (stack.getOperandStackSize()) {
   //   std::cerr << fmt::format("operand stack:\n");
   //   for (int i = 0; i < stack.getOperandStackSize(); ++i) {
-  //     std::cerr << fmt::format("operand {}: ", i);
   //     Value element = stack.getTop()[i];
-  //     renderToString(element);
+  //     std::cerr << fmt::format("operand {}, raw {:#x}\n", i,
+  //     (unsigned)element);
   //   }
   // }
   char byte = readByte();
@@ -586,7 +584,7 @@ int32_t Interpreter::readWord() {
 Value &Interpreter::accessVar(char designation, int32_t index) {
   switch (designation) {
   case LOC_Global:
-    return globalArea->accessGlobal(index);
+    return accessGlobal(index);
   case LOC_Local:
     return stack.accessLocal(index);
   case LOC_Arg:

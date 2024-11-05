@@ -3,29 +3,31 @@
 
 using namespace lama;
 
+#define GLOBAL_AREA_SIZE 1024 * 1024
+
 extern "C" {
 
-void *__start_custom_data;
-void *__stop_custom_data;
+Value __start_custom_data;
+Value globalData[GLOBAL_AREA_SIZE];
+Value __stop_custom_data;
 }
 
-//===----------------------------------------------------------------------===//
-// GlobalArea
-//===----------------------------------------------------------------------===//
+static size_t sizeWords;
 
-GlobalArea::GlobalArea(size_t sizeWords)
-    : data(new Value[sizeWords]), sizeWords(sizeWords) {
-  // Fill with some boxed values so that GC will skip these
-  memset(data.get(), 1, sizeWords * sizeof(Value));
-  __start_custom_data = data.get();
-  __stop_custom_data = data.get() + sizeWords;
+void lama::initGlobalArea(size_t sizeWords) {
+  if (sizeWords > GLOBAL_AREA_SIZE) {
+    runtimeError("Too large global area size = {}", sizeWords);
+  }
+  ::sizeWords = sizeWords;
+  memset(globalData, 1, sizeof globalData);
+  __start_custom_data = 1;
 }
 
-Value &GlobalArea::accessGlobal(int32_t index) {
+Value &lama::accessGlobal(int32_t index) {
   if (index < 0 || index >= sizeWords) {
     runtimeError(
         "access global variable out of bounds: index {} is not in [0, {})",
         index, sizeWords);
   }
-  return data.get()[index];
+  return globalData[index];
 }

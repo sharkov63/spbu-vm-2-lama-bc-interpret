@@ -19,8 +19,6 @@ public:
 
   const char *getStringAt(size_t offset) const;
 
-  std::shared_ptr<GlobalArea> getGlobalArea() { return globalArea; }
-
 private:
   void init();
 
@@ -30,8 +28,6 @@ private:
 
   const char *stringTable;
   size_t stringTableSizeBytes;
-
-  std::shared_ptr<GlobalArea> globalArea;
 
   const int32_t *publicSymbolTable;
   size_t publicSymbolsNum;

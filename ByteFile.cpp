@@ -59,7 +59,7 @@ void ByteFile::init() {
   stringTable = data.get() + currentOffset;
   currentOffset += stringTableSizeBytes;
 
-  globalArea = std::make_shared<GlobalArea>(globalAreaSizeWords);
+  initGlobalArea(globalAreaSizeWords);
 
   code = &stringTable[stringTableSizeBytes];
   codeSizeBytes = sizeBytes - currentOffset;

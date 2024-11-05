@@ -1,23 +1,10 @@
 #pragma once
 
 #include "Value.h"
-#include <cstdlib>
-#include <memory>
 
 namespace lama {
 
-class GlobalArea {
-public:
-  GlobalArea() = default;
-  GlobalArea(size_t sizeWords);
-  GlobalArea(GlobalArea &&) = default;
-  GlobalArea &operator=(GlobalArea &&) = default;
-
-  Value &accessGlobal(int32_t index);
-
-private:
-  std::unique_ptr<Value[]> data;
-  size_t sizeWords;
-};
+void initGlobalArea(size_t sizeWords);
+Value &accessGlobal(int32_t index);
 
 } // namespace lama
