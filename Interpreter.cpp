@@ -153,8 +153,7 @@ bool Interpreter::step() {
   //   std::cerr << fmt::format("operand stack:\n");
   //   for (int i = 0; i < stack.getOperandStackSize(); ++i) {
   //     Value element = stack.getTop()[i];
-  //     std::cerr << fmt::format("operand {}, raw {:#x}\n", i,
-  //     (unsigned)element);
+  //     std::cerr << fmt::format("operand {}, raw {:#x}\n", i, (unsigned)element);
   //   }
   // }
   char byte = readByte();
@@ -403,8 +402,16 @@ bool Interpreter::step() {
     // 0x55 n:32
     // CALLC nargs
     case 0x5: {
-      readWord();
-      Value closure = stack.popOperand();
+      uint32_t nargs = readWord();
+      if (stack.getOperandStackSize() < nargs + 1) {
+        runtimeError("cannot call closure with {} args: operand stack size is "
+                     "too small ({})",
+                     nargs, stack.getOperandStackSize());
+      }
+      Value closure = stack.getTop()[nargs];
+      for (int i = nargs - 1; i >= 0; --i)
+        stack.getTop()[i + 1] = stack.getTop()[i];
+      stack.popOperand();
       const char *entry = *reinterpret_cast<const char **>(closure);
       stack.setNextReturnAddress(instructionPointer);
       instructionPointer = entry;
@@ -439,7 +446,8 @@ bool Interpreter::step() {
     case 0x8: {
       uint32_t nelems = readWord();
       Value array = stack.popOperand();
-      Value result = Barray_patt(reinterpret_cast<void *>(array), boxInt(nelems));
+      Value result =
+          Barray_patt(reinterpret_cast<void *>(array), boxInt(nelems));
       stack.pushOperand(result);
       return true;
     }
