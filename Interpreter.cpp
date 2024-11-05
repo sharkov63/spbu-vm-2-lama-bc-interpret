@@ -39,6 +39,7 @@ extern int Bunboxed_patt(void *x);
 extern int Barray_tag_patt(void *x);
 extern int Bstring_tag_patt(void *x);
 extern int Bsexp_tag_patt(void *x);
+extern int Barray_patt(void *d, int n);
 }
 
 enum VarDesignation {
@@ -430,6 +431,15 @@ bool Interpreter::step() {
 
       Value result = Btag((void *)target, tag, boxInt(nargs));
 
+      stack.pushOperand(result);
+      return true;
+    }
+    // 0x58 n:32
+    // ARRAY n
+    case 0x8: {
+      uint32_t nelems = readWord();
+      Value array = stack.popOperand();
+      Value result = Barray_patt(reinterpret_cast<void *>(array), boxInt(nelems));
       stack.pushOperand(result);
       return true;
     }
