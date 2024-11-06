@@ -1,7 +1,6 @@
 #include "Interpreter.h"
 #include "ByteFile.h"
 #include "Error.h"
-#include "GlobalArea.h"
 #include "Stack.h"
 #include "Value.h"
 #include <iostream>
@@ -10,6 +9,8 @@ using namespace lama;
 
 extern "C" {
 
+extern Value __start_custom_data;
+extern Value __stop_custom_data;
 extern size_t __gc_stack_top, __gc_stack_bottom;
 
 void __gc_init();
@@ -64,6 +65,15 @@ enum Binop {
   BINOP_And = 0xc,
   BINOP_Or = 0xd,
 };
+
+static void initGlobalArea() {
+  for (Value *p = &__start_custom_data; p < &__stop_custom_data; ++p)
+    *p = 1;
+}
+
+static Value &accessGlobal(uint32_t index) {
+  return (&__start_custom_data)[index];
+}
 
 static Stack stack;
 
@@ -622,6 +632,7 @@ Value &Interpreter::accessVar(char designation, int32_t index) {
 }
 
 void lama::interpret(ByteFile byteFile) {
+  initGlobalArea();
   interpreter = Interpreter(std::move(byteFile));
   interpreter.run();
 }

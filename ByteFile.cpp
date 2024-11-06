@@ -1,6 +1,5 @@
 #include "ByteFile.h"
 #include "Error.h"
-#include "GlobalArea.h"
 #include <fstream>
 
 using namespace lama;
@@ -58,8 +57,6 @@ void ByteFile::init() {
   }
   stringTable = data.get() + currentOffset;
   currentOffset += stringTableSizeBytes;
-
-  initGlobalArea(globalAreaSizeWords);
 
   code = &stringTable[stringTableSizeBytes];
   codeSizeBytes = sizeBytes - currentOffset;
