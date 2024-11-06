@@ -153,7 +153,8 @@ bool Interpreter::step() {
   //   std::cerr << fmt::format("operand stack:\n");
   //   for (int i = 0; i < stack.getOperandStackSize(); ++i) {
   //     Value element = stack.getTop()[i];
-  //     std::cerr << fmt::format("operand {}, raw {:#x}\n", i, (unsigned)element);
+  //     std::cerr << fmt::format("operand {}, raw {:#x}\n", i,
+  //     (unsigned)element);
   //   }
   // }
   char byte = readByte();
@@ -367,8 +368,10 @@ bool Interpreter::step() {
       return true;
     }
     // 0x52 n:32 n:32
+    // 0x53 n:32 n:32
     // BEGIN nargs nlocals
-    case 0x2: {
+    case 0x2:
+    case 0x3: {
       uint32_t nargs = readWord();
       uint32_t nlocals = readWord();
       stack.beginFunction(nargs, nlocals);
