@@ -1,15 +1,15 @@
 CC=gcc
 CXX=g++
 COMMON_FLAGS=-m32 -g2 -fstack-protector-all
-INTERPRETER_FLAGS=$(COMMON_FLAGS) -DFMT_HEADER_ONLY -ILama
-REGRESSION_TESTS=$(sort $(filter-out test111, $(notdir $(basename $(wildcard Lama/regression/test*.lama)))))
+INTERPRETER_FLAGS=$(COMMON_FLAGS) -DFMT_HEADER_ONLY
+#REGRESSION_TESTS=$(sort $(filter-out test111, $(notdir $(basename $(wildcard Lama/regression/test*.lama)))))
 LAMAC=lamac
 YAILAMA=$(realpath ./YAILama)
 
 all: runtime YAILama
 
 runtime:
-	$(MAKE) -C Lama/runtime
+	$(MAKE) -C runtime
 
 Main.o: Main.cpp ByteFile.h Interpreter.h
 	$(CXX) -o $@ $(INTERPRETER_FLAGS) -c Main.cpp
@@ -36,20 +36,18 @@ Bclosure_.o: Bclosure_.s
 	$(CC) -o $@ $(INTERPRETER_FLAGS) -c Bclosure_.s
 
 YAILama: Main.o GlobalArea.o ByteFile.o Stack.o Interpreter.o Barray_.o Bsexp_.o Bclosure_.o
-	$(CXX) -o $@ $(INTERPRETER_FLAGS) Lama/runtime/runtime.o Lama/runtime/gc.o $^
+	$(CXX) -o $@ $(INTERPRETER_FLAGS) runtime/runtime.o runtime/gc.o $^
 
 clean:
 	$(RM) *.a *.o *~ YAILama
-	$(MAKE) clean -C Lama/runtime
+	$(MAKE) clean -C runtime
+	$(MAKE) clean -C regression
 
-test_regression: YAILama $(REGRESSION_TESTS)
+regression:
+	$(MAKE) clean check -j8 -C regression
 
-$(REGRESSION_TESTS): %: 
-	@echo "Running regression test $@"
-	@cd Lama/regression && \
-	$(LAMAC) $@.lama && cat $@.input | ./$@ > $@.lamac.log && \
-	$(LAMAC) -b $@.lama && \
-	cat $@.input | $(YAILAMA) $@.bc > $@.yailama.log && \
-	diff $@.lamac.log $@.yailama.log
+regression-expressions:
+	$(MAKE) clean check -j8 -C regression/expressions
+	$(MAKE) clean check -j8 -C regression/deep-expressions
 
-.PHONY: all clean runtime test_regression
+.PHONY: all clean runtime regression regression-expressions
