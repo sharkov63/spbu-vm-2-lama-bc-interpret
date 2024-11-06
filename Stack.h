@@ -33,10 +33,12 @@ public:
   void setNextReturnAddress(const char *address) {
     nextReturnAddress = address;
   }
+  void setNextIsClosure(bool isClousre) { nextIsClosure = isClousre; }
 
   Value *getTop() { return frame.top; }
   Value *getBottom() { return data.end(); }
   size_t getOperandStackSize() const { return frame.operandStackSize; }
+  Value getClosure();
 
 private:
   void checkNonEmptyOperandStack() const;
@@ -54,7 +56,9 @@ private:
   std::array<Value, STACK_SIZE> data;
   Frame frame;
   std::vector<Frame> frameStack;
+
   const char *nextReturnAddress;
+  bool nextIsClosure;
 };
 
 } // namespace lama

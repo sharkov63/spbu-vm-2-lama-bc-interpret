@@ -367,13 +367,15 @@ bool Interpreter::step() {
         instructionPointer = byteFile.getAddressFor(offset);
       return true;
     }
-    // 0x52 n:32 n:32
-    // 0x53 n:32 n:32
+    // 0x5c n:32 n:32
     // BEGIN nargs nlocals
+    //   0x52 - without closure
+    //   0x53 - with closure
     case 0x2:
     case 0x3: {
       uint32_t nargs = readWord();
       uint32_t nlocals = readWord();
+      bool isClosure = low == 0x3;
       stack.beginFunction(nargs, nlocals);
       return true;
     }
@@ -412,11 +414,12 @@ bool Interpreter::step() {
                      nargs, stack.getOperandStackSize());
       }
       Value closure = stack.getTop()[nargs];
-      for (int i = nargs - 1; i >= 0; --i)
-        stack.getTop()[i + 1] = stack.getTop()[i];
-      stack.popOperand();
+      // for (int i = nargs - 1; i >= 0; --i)
+      //   stack.getTop()[i + 1] = stack.getTop()[i];
+      // stack.popOperand();
       const char *entry = *reinterpret_cast<const char **>(closure);
       stack.setNextReturnAddress(instructionPointer);
+      stack.setNextIsClosure(true);
       instructionPointer = entry;
       return true;
     }
@@ -427,6 +430,7 @@ bool Interpreter::step() {
       const char *address = byteFile.getAddressFor(offset);
       readWord();
       stack.setNextReturnAddress(instructionPointer);
+      stack.setNextIsClosure(false);
       instructionPointer = address;
       return true;
     }
@@ -610,6 +614,9 @@ Value &Interpreter::accessVar(char designation, int32_t index) {
     return stack.accessLocal(index);
   case LOC_Arg:
     return stack.accessArg(index);
+  case LOC_Access:
+    Value *closure = reinterpret_cast<Value *>(stack.getClosure());
+    return closure[index + 1];
   }
   runtimeError("unsupported variable designation {:#x}", designation);
 }

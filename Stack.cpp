@@ -17,13 +17,14 @@ Stack::Stack() {
 }
 
 void Stack::beginFunction(size_t nargs, size_t nlocals) {
-  if (frame.operandStackSize < nargs) {
-    runtimeError("expected {} arguments, but found operand stack of size {}",
-                 nargs, frame.operandStackSize);
+  size_t noperands = nargs + nextIsClosure;
+  if (frame.operandStackSize < noperands) {
+    runtimeError("expected {} operands, but found only {}", noperands,
+                 frame.operandStackSize);
   }
   Value *newBase = frame.top;
-  frame.operandStackSize -= nargs;
-  frame.top += nargs;
+  frame.operandStackSize -= noperands;
+  frame.top += noperands;
   frameStack.push_back(frame);
   frame.base = newBase;
   frame.top = frame.base - nlocals;
@@ -108,6 +109,8 @@ Value &Stack::accessArg(ssize_t index) {
   }
   return frame.base[frame.nargs - 1 - index];
 }
+
+Value Stack::getClosure() { return frame.base[frame.nargs]; }
 
 void Stack::checkNonEmptyOperandStack() const {
   if (frame.operandStackSize == 0) {
