@@ -41,3 +41,21 @@ Sort    1.87
 `which time` -f "Sort\t%U" lamac -i Sort.lama < /dev/null
 Sort    3.99
 ```
+
+```
+`which time` -f "Sort\t%U" ./Sort
+Sort    1.10
+`which time` -f "Sort\t%U" ../YAILama Sort.bc
+Sort    2.11
+`which time` -f "Sort\t%U" lamac -i Sort.lama < /dev/null
+Sort    4.04
+```
+
+```
+`which time` -f "Sort\t%U" ./Sort
+Sort    1.08
+`which time` -f "Sort\t%U" ../YAILama Sort.bc
+Sort    1.91
+`which time` -f "Sort\t%U" lamac -i Sort.lama < /dev/null
+Sort    4.05
+```

@@ -144,8 +144,8 @@ struct Stack {
   static void setNextIsClosure(bool isClousre) { nextIsClosure = isClousre; }
 
   static Value *&top() { return __gc_stack_top; }
-private:
 
+private:
   static void checkNonEmptyOperandStack() {
     if (frame.operandStackSize == 0) {
       runtimeError("cannot pop from empty operand stack");
@@ -315,10 +315,11 @@ bool Interpreter::step() {
   //     (unsigned)element);
   //   }
   // }
-  // std::cerr << fmt::format("stack region is ({}, {})\n", fmt::ptr(__gc_stack_top), fmt::ptr(__gc_stack_bottom));
-  char byte = readByte();
-  char high = (0xF0 & byte) >> 4;
-  char low = 0x0F & byte;
+  // std::cerr << fmt::format("stack region is ({}, {})\n",
+  // fmt::ptr(__gc_stack_top), fmt::ptr(__gc_stack_bottom));
+  unsigned char byte = readByte();
+  unsigned char high = (0xF0 & byte) >> 4;
+  unsigned char low = 0x0F & byte;
   switch (high) {
   // BINOP
   case 0x0: {
@@ -336,54 +337,24 @@ bool Interpreter::step() {
       runtimeError("division by zero");
     int32_t result;
     switch (low) {
-    case BINOP_Add: {
-      result = lhs + rhs;
-      break;
-    }
-    case BINOP_Sub: {
-      result = lhs - rhs;
-      break;
-    }
-    case BINOP_Mul: {
-      result = lhs * rhs;
-      break;
-    }
-    case BINOP_Div: {
-      result = lhs / rhs;
-      break;
-    }
-    case BINOP_Mod: {
-      result = lhs % rhs;
-      break;
-    }
-    case BINOP_Lt: {
-      result = lhs < rhs;
-      break;
-    }
-    case BINOP_Leq: {
-      result = lhs <= rhs;
-      break;
-    }
-    case BINOP_Gt: {
-      result = lhs > rhs;
-      break;
-    }
-    case BINOP_Geq: {
-      result = lhs >= rhs;
-      break;
-    }
-    case BINOP_Neq: {
-      result = lhs != rhs;
-      break;
-    }
-    case BINOP_And: {
-      result = lhs && rhs;
-      break;
-    }
-    case BINOP_Or: {
-      result = lhs || rhs;
-      break;
-    }
+#define CASE(code, op)                                                         \
+  case code: {                                                                 \
+    result = lhs op rhs;                                                       \
+    break;                                                                     \
+  }
+      CASE(BINOP_Add, +)
+      CASE(BINOP_Sub, -)
+      CASE(BINOP_Mul, *)
+      CASE(BINOP_Div, /)
+      CASE(BINOP_Mod, %)
+      CASE(BINOP_Lt, <)
+      CASE(BINOP_Leq, <=)
+      CASE(BINOP_Gt, >)
+      CASE(BINOP_Geq, >=)
+      CASE(BINOP_Neq, !=)
+      CASE(BINOP_And, &&)
+      CASE(BINOP_Or, ||)
+#undef CASE
     default: {
       runtimeError("undefined binary operator with code {:x}", low);
     }
