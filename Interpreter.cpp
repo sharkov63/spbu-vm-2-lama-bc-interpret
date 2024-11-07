@@ -79,6 +79,7 @@ enum InstCode {
   I_DROP = 0x18,
   I_DUP = 0x19,
   I_ELEM = 0x1b,
+
   I_CJMPz = 0x50,
   I_CJMPnz = 0x51,
   I_BEGIN = 0x52,
@@ -90,6 +91,14 @@ enum InstCode {
   I_ARRAY = 0x58,
   I_FAIL = 0x59,
   I_LINE = 0x5a,
+
+  I_PATT_StrCmp = 0x60,
+  I_PATT_String = 0x61,
+  I_PATT_Array = 0x62,
+  I_PATT_Sexp = 0x63,
+  I_PATT_Boxed = 0x64,
+  I_PATT_UnBoxed = 0x65,
+  I_PATT_Closure = 0x66,
 };
 
 static void initGlobalArea() {
@@ -592,10 +601,8 @@ bool Interpreter::step() {
   // 0x6p
   // PATT p
   case 0x6: {
-    switch (low) {
-    // 0x60
-    // PATT StrCmp
-    case 0x0: {
+    switch (byte) {
+    case I_PATT_StrCmp: {
       Value x = Stack::popOperand();
       Value y = Stack::popOperand();
       Value result = Bstring_patt(reinterpret_cast<void *>(x),
@@ -603,49 +610,37 @@ bool Interpreter::step() {
       Stack::pushOperand(result);
       return true;
     }
-    // 0x61
-    // PATT String
-    case 0x1: {
+    case I_PATT_String: {
       Value operand = Stack::popOperand();
       Value result = Bstring_tag_patt(reinterpret_cast<void *>(operand));
       Stack::pushOperand(result);
       return true;
     }
-    // 0x62
-    // PATT Array
-    case 0x2: {
+    case I_PATT_Array: {
       Value operand = Stack::popOperand();
       Value result = Barray_tag_patt(reinterpret_cast<void *>(operand));
       Stack::pushOperand(result);
       return true;
     }
-    // 0x63
-    // PATT Sexp
-    case 0x3: {
+    case I_PATT_Sexp: {
       Value operand = Stack::popOperand();
       Value result = Bsexp_tag_patt(reinterpret_cast<void *>(operand));
       Stack::pushOperand(result);
       return true;
     }
-    // 0x64
-    // PATT Boxed
-    case 0x4: {
+    case I_PATT_Boxed: {
       Value operand = Stack::popOperand();
       Value result = Bboxed_patt(reinterpret_cast<void *>(operand));
       Stack::pushOperand(result);
       return true;
     }
-    // 0x65
-    // PATT UnBoxed
-    case 0x5: {
+    case I_PATT_UnBoxed: {
       Value operand = Stack::popOperand();
       Value result = Bunboxed_patt(reinterpret_cast<void *>(operand));
       Stack::pushOperand(result);
       return true;
     }
-    // 0x66
-    // PATT Closure
-    case 0x6: {
+    case I_PATT_Closure: {
       Value operand = Stack::popOperand();
       Value result = Bclosure_tag_patt(reinterpret_cast<void *>(operand));
       Stack::pushOperand(result);
