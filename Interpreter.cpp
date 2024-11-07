@@ -281,13 +281,15 @@ private:
   ByteFile byteFile;
 
   const char *instructionPointer;
+  const char *codeEnd;
 } interpreter;
 
 } // namespace
 
 Interpreter::Interpreter(ByteFile byteFile)
     : byteFile(std::move(byteFile)),
-      instructionPointer(this->byteFile.getCode()) {}
+      instructionPointer(this->byteFile.getCode()),
+      codeEnd(instructionPointer + this->byteFile.getCodeSizeBytes()) {}
 
 void Interpreter::run() {
   __gc_init();
@@ -724,9 +726,15 @@ bool Interpreter::step() {
   runtimeError("unsupported instruction code {:#04x}", byte);
 }
 
-char Interpreter::readByte() { return *instructionPointer++; }
+char Interpreter::readByte() {
+  if (instructionPointer > codeEnd - 1)
+    runtimeError("unexpected end of bytecode, expected a byte");
+  return *instructionPointer++;
+}
 
 int32_t Interpreter::readWord() {
+  if (instructionPointer > codeEnd - 4)
+    runtimeError("unexpected end of bytecode, expected a word");
   int32_t word;
   memcpy(&word, instructionPointer, sizeof(int32_t));
   instructionPointer += sizeof(int32_t);

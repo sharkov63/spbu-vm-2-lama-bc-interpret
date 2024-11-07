@@ -14,6 +14,7 @@ public:
   static ByteFile load(std::string path);
 
   const char *getCode() const { return code; }
+  size_t getCodeSizeBytes() { return codeSizeBytes; }
 
   const char *getAddressFor(size_t offset) const;
 

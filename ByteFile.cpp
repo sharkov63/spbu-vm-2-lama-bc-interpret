@@ -1,6 +1,7 @@
 #include "ByteFile.h"
 #include "Error.h"
 #include <fstream>
+#include <algorithm>
 
 using namespace lama;
 
@@ -75,7 +76,7 @@ ByteFile ByteFile::load(std::string path) {
 }
 
 const char *ByteFile::getAddressFor(size_t offset) const {
-  if (offset > codeSizeBytes) {
+  if (offset >= codeSizeBytes) {
     runtimeError("access instruction address {:#x} out of bounds [0, {:#x})",
                  offset, codeSizeBytes);
   }
@@ -83,7 +84,7 @@ const char *ByteFile::getAddressFor(size_t offset) const {
 }
 
 const char *ByteFile::getStringAt(size_t offset) const {
-  if (offset > stringTableSizeBytes) {
+  if (offset >= stringTableSizeBytes) {
     runtimeError("access string at {:#x} out of bounds [0, {:#x}]", offset,
                  stringTableSizeBytes);
   }
