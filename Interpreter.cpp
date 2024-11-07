@@ -69,6 +69,18 @@ enum Binop {
   BINOP_Or = 0xd,
 };
 
+enum InstCode {
+  I_CONST = 0x10,
+  I_STRING = 0x11,
+  I_SEXP = 0x12,
+  I_STA = 0x14,
+  I_JMP = 0x15,
+  I_END = 0x16,
+  I_DROP = 0x18,
+  I_DUP = 0x19,
+  I_ELEM = 0x1b,
+};
+
 static void initGlobalArea() {
   for (Value *p = &__start_custom_data; p < &__stop_custom_data; ++p)
     *p = 1;
@@ -365,25 +377,19 @@ bool Interpreter::step() {
     return true;
   }
   case 0x1: {
-    switch (low) {
-    // 0x10 n:32
-    // CONST n
-    case 0x0: {
+    switch (byte) {
+    case I_CONST: {
       Stack::pushIntOperand(readWord());
       return true;
     }
-    // 0x11 s:32
-    // STRING s
-    case 0x1: {
+    case I_STRING: {
       uint32_t offset = readWord();
       const char *cstr = byteFile.getStringAt(offset);
       Value string = createString(cstr);
       Stack::pushOperand(string);
       return true;
     }
-    // 0x12 s:32 n:32
-    // SEXP s n
-    case 0x2: {
+    case I_SEXP: {
       Value stringOffset = readWord();
       uint32_t nargs = readWord();
       if (Stack::getOperandStackSize() < nargs) {
@@ -407,9 +413,7 @@ bool Interpreter::step() {
       Stack::pushOperand(sexp);
       return true;
     }
-    // 0x14
-    // STA
-    case 0x4: {
+    case I_STA: {
       Value value = Stack::popOperand();
       Value index = Stack::popOperand();
       Value container = Stack::popOperand();
@@ -419,37 +423,27 @@ bool Interpreter::step() {
       Stack::pushOperand(result);
       return true;
     }
-    // 0x15 l:32
-    // JMP l
-    case 0x5: {
+    case I_JMP: {
       uint32_t offset = readWord();
       instructionPointer = byteFile.getAddressFor(offset);
       return true;
     }
-    // 0x16
-    // END
-    case 0x6: {
+    case I_END: {
       const char *returnAddress = Stack::endFunction();
       if (Stack::isEmpty())
         return false;
       instructionPointer = returnAddress;
       return true;
     }
-    // 0x18
-    // DROP
-    case 0x8: {
+    case I_DROP: {
       Stack::popOperand();
       return true;
     }
-    // 0x19
-    // DUP
-    case 0x9: {
+    case I_DUP: {
       Stack::pushOperand(Stack::peakOperand());
       return true;
     }
-    // 0x1b
-    // ELEM
-    case 0xb: {
+    case I_ELEM: {
       Value index = Stack::popOperand();
       Value container = Stack::popOperand();
       Value element = reinterpret_cast<Value>(
