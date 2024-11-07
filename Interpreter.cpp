@@ -99,6 +99,12 @@ enum InstCode {
   I_PATT_Boxed = 0x64,
   I_PATT_UnBoxed = 0x65,
   I_PATT_Closure = 0x66,
+
+  I_CALL_Lread = 0x70,
+  I_CALL_Lwrite = 0x71,
+  I_CALL_Llength = 0x72,
+  I_CALL_Lstring = 0x73,
+  I_CALL_Barray = 0x74,
 };
 
 static void initGlobalArea() {
@@ -653,39 +659,29 @@ bool Interpreter::step() {
     break;
   }
   case 0x7: {
-    switch (low) {
-    // 0x70
-    // CALL Lread
-    case 0x0: {
+    switch (byte) {
+    case I_CALL_Lread: {
       Stack::pushOperand(Lread());
       return true;
     }
-    // 0x71
-    // CALL Lwrite
-    case 0x1: {
+    case I_CALL_Lwrite: {
       Lwrite(Stack::popOperand());
       Stack::pushIntOperand(0);
       return true;
     }
-    // 0x72
-    // CALL Llength
-    case 0x2: {
+    case I_CALL_Llength: {
       Value string = Stack::popOperand();
       Value length = Llength(reinterpret_cast<void *>(string));
       Stack::pushOperand(length);
       return true;
     }
-    // 0x73
-    // CALL Lstring
-    case 0x3: {
+    case I_CALL_Lstring: {
       Value operand = Stack::popOperand();
       Value rendered = renderToString(operand);
       Stack::pushOperand(rendered);
       return true;
     }
-    // 0x74 n:32
-    // CALL Barray n:32
-    case 0x4: {
+    case I_CALL_Barray: {
       uint32_t nargs = readWord();
       if (Stack::getOperandStackSize() < nargs) {
         runtimeError("cannot construct array of {} elements: operand stack "
