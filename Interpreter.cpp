@@ -1,9 +1,11 @@
 #include "Interpreter.h"
 #include "ByteFile.h"
 #include "Error.h"
-#include "Stack.h"
 #include "Value.h"
+#include <algorithm>
+#include <array>
 #include <iostream>
+#include <vector>
 
 using namespace lama;
 
@@ -11,7 +13,8 @@ extern "C" {
 
 extern Value __start_custom_data;
 extern Value __stop_custom_data;
-extern size_t __gc_stack_top, __gc_stack_bottom;
+extern Value *__gc_stack_top;
+extern Value *__gc_stack_bottom;
 
 void __gc_init();
 
@@ -75,37 +78,183 @@ static Value &accessGlobal(uint32_t index) {
   return (&__start_custom_data)[index];
 }
 
-static Stack stack;
+#define STACK_SIZE (1 << 20)
 
-static void gcUpdateStack() {
-  __gc_stack_top = reinterpret_cast<size_t>(stack.getTop() - 1);
-  __gc_stack_bottom = reinterpret_cast<size_t>(stack.getBottom());
+namespace {
+
+struct Stack {
+
+  static void init() {
+    __gc_stack_bottom = data.end();
+    frame.base = __gc_stack_bottom;
+    // Two arguments to main: argc and argv
+    __gc_stack_top = __gc_stack_bottom - 3;
+    frame.operandStackSize = 2;
+  }
+
+  static size_t getOperandStackSize() { return frame.operandStackSize; }
+  static bool isEmpty() { return frameStack.empty(); }
+  static bool isNotEmpty() { return !isEmpty(); }
+  static Value getClosure();
+
+  static Value &accessLocal(ssize_t index);
+  static Value &accessArg(ssize_t index);
+
+  static void pushOperand(Value value) {
+    ++frame.operandStackSize;
+    *top() = value;
+    --top();
+  }
+  static Value peakOperand() {
+    checkNonEmptyOperandStack();
+    return top()[1];
+  }
+  static Value popOperand() {
+    checkNonEmptyOperandStack();
+    --frame.operandStackSize;
+    ++top();
+    return *top();
+  }
+  static void popNOperands(size_t noperands) {
+    if (frame.operandStackSize < noperands) {
+      runtimeError("cannot pop {} operands because operand stack size is {}",
+                   noperands, frame.operandStackSize);
+    }
+    frame.operandStackSize -= noperands;
+    top() += noperands;
+  }
+
+  static void pushIntOperand(int32_t operand) { pushOperand(boxInt(operand)); }
+  static int32_t popIntOperand() {
+    Value operand = popOperand();
+    if (!valueIsInt(operand)) {
+      runtimeError(
+          "expected a (boxed) number at the operand stack top, found {:#x}",
+          operand);
+    }
+    return unboxInt(operand);
+  }
+
+  static void beginFunction(size_t nargs, size_t nlocals);
+  static const char *endFunction();
+
+  static void setNextReturnAddress(const char *address) {
+    nextReturnAddress = address;
+  }
+  static void setNextIsClosure(bool isClousre) { nextIsClosure = isClousre; }
+
+  static Value *&top() { return __gc_stack_top; }
+private:
+
+  static void checkNonEmptyOperandStack() {
+    if (frame.operandStackSize == 0) {
+      runtimeError("cannot pop from empty operand stack");
+    }
+  }
+
+private:
+  static std::array<Value, STACK_SIZE> data;
+
+  struct Frame {
+    Value *base;
+    Value *top;
+    size_t nargs;
+    size_t nlocals;
+    size_t operandStackSize = 0;
+    const char *returnAddress;
+  };
+
+  static Frame frame;
+  static std::vector<Frame> frameStack;
+
+  static const char *nextReturnAddress;
+  static bool nextIsClosure;
+};
+
+} // namespace
+
+std::array<Value, STACK_SIZE> Stack::data;
+
+Stack::Frame Stack::frame;
+std::vector<Stack::Frame> Stack::frameStack;
+const char *Stack::nextReturnAddress;
+bool Stack::nextIsClosure;
+
+Value Stack::getClosure() { return frame.base[frame.nargs]; }
+
+Value &Stack::accessLocal(ssize_t index) {
+  if (index < 0 || index >= frame.nlocals) {
+    runtimeError(
+        "access local variable out of bounds: index {} is not in [0, {})",
+        index, frame.nlocals);
+  }
+  return frame.base[-index - 1];
+}
+
+Value &Stack::accessArg(ssize_t index) {
+  if (index < 0 || index >= frame.nargs) {
+    runtimeError("access argument out of bounds: index {} is not in [0, {})",
+                 index, frame.nargs);
+  }
+  return frame.base[frame.nargs - 1 - index];
+}
+void Stack::beginFunction(size_t nargs, size_t nlocals) {
+  size_t noperands = nargs + nextIsClosure;
+  if (frame.operandStackSize < noperands) {
+    runtimeError("expected {} operands, but found only {}", noperands,
+                 frame.operandStackSize);
+  }
+  Value *newBase = top() + 1;
+  frame.operandStackSize -= noperands;
+  frame.top = newBase + noperands - 1;
+  frameStack.push_back(frame);
+  frame.base = newBase;
+  top() = newBase - nlocals - 1;
+  frame.nargs = nargs;
+  frame.nlocals = nlocals;
+  frame.operandStackSize = 0;
+  frame.returnAddress = nextReturnAddress;
+  // Fill with some boxed values so that GC will skip these
+  memset(top() + 1, 1, (char *)frame.base - (char *)(top() + 1));
+}
+
+const char *Stack::endFunction() {
+  if (isEmpty()) {
+    runtimeError("no function to end");
+  }
+  if (frame.operandStackSize != 1) {
+    runtimeError(
+        "attempt to end function with operand stack size {}, expected 1",
+        frame.operandStackSize);
+  }
+  const char *returnAddress = frame.returnAddress;
+  Value ret = peakOperand();
+  frame = frameStack.back();
+  frameStack.pop_back();
+  top() = frame.top;
+  pushOperand(ret);
+  return returnAddress;
 }
 
 static Value renderToString(Value value) {
-  gcUpdateStack();
   return reinterpret_cast<Value>(Lstring(reinterpret_cast<void *>(value)));
 }
 
 static Value createString(const char *cstr) {
-  gcUpdateStack();
   return reinterpret_cast<Value>(Bstring(const_cast<char *>(cstr)));
 }
 
 static Value createArray(size_t nargs) {
-  gcUpdateStack();
-  return reinterpret_cast<Value>(Barray_(stack.getTop(), nargs));
+  return reinterpret_cast<Value>(Barray_(Stack::top() + 1, nargs));
 }
 
 static Value createSexp(size_t nargs) {
-  gcUpdateStack();
-  return reinterpret_cast<Value>(Bsexp_(stack.getTop(), nargs));
+  return reinterpret_cast<Value>(Bsexp_(Stack::top() + 1, nargs));
 }
 
 static Value createClosure(const char *entry, size_t nvars) {
-  gcUpdateStack();
   return reinterpret_cast<Value>(
-      Bclosure_(stack.getTop(), nvars, const_cast<char *>(entry)));
+      Bclosure_(Stack::top() + 1, nvars, const_cast<char *>(entry)));
 }
 
 static const char unknownFile[] = "<unknown file>";
@@ -142,8 +291,7 @@ Interpreter::Interpreter(ByteFile byteFile)
 
 void Interpreter::run() {
   __gc_init();
-  __gc_stack_bottom = (size_t)(stack.getBottom() - 2);
-  __gc_stack_top = (size_t)stack.getTop();
+  Stack::init();
   while (true) {
     const char *currentInstruction = instructionPointer;
     try {
@@ -159,14 +307,15 @@ void Interpreter::run() {
 bool Interpreter::step() {
   // std::cerr << fmt::format("interpreting at {:#x}\n",
   //                          instructionPointer - byteFile.getCode());
-  // if (stack.getOperandStackSize()) {
+  // if (Stack::getOperandStackSize()) {
   //   std::cerr << fmt::format("operand stack:\n");
-  //   for (int i = 0; i < stack.getOperandStackSize(); ++i) {
-  //     Value element = stack.getTop()[i];
+  //   for (int i = 0; i < Stack::getOperandStackSize(); ++i) {
+  //     Value element = Stack::top()[i + 1];
   //     std::cerr << fmt::format("operand {}, raw {:#x}\n", i,
   //     (unsigned)element);
   //   }
   // }
+  // std::cerr << fmt::format("stack region is ({}, {})\n", fmt::ptr(__gc_stack_top), fmt::ptr(__gc_stack_bottom));
   char byte = readByte();
   char high = (0xF0 & byte) >> 4;
   char low = 0x0F & byte;
@@ -174,15 +323,15 @@ bool Interpreter::step() {
   // BINOP
   case 0x0: {
     if (low == BINOP_Eq) {
-      Value rhs = stack.popOperand();
-      Value lhs = stack.popOperand();
+      Value rhs = Stack::popOperand();
+      Value lhs = Stack::popOperand();
       Value result = boxInt(lhs == rhs);
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
 
-    int32_t rhs = stack.popIntOperand();
-    int32_t lhs = stack.popIntOperand();
+    int32_t rhs = Stack::popIntOperand();
+    int32_t lhs = Stack::popIntOperand();
     if ((low == BINOP_Div || low == BINOP_Mod) && rhs == 0)
       runtimeError("division by zero");
     int32_t result;
@@ -239,7 +388,7 @@ bool Interpreter::step() {
       runtimeError("undefined binary operator with code {:x}", low);
     }
     }
-    stack.pushIntOperand(result);
+    Stack::pushIntOperand(result);
     return true;
   }
   case 0x1: {
@@ -247,7 +396,7 @@ bool Interpreter::step() {
     // 0x10 n:32
     // CONST n
     case 0x0: {
-      stack.pushIntOperand(readWord());
+      Stack::pushIntOperand(readWord());
       return true;
     }
     // 0x11 s:32
@@ -256,7 +405,7 @@ bool Interpreter::step() {
       uint32_t offset = readWord();
       const char *cstr = byteFile.getStringAt(offset);
       Value string = createString(cstr);
-      stack.pushOperand(string);
+      Stack::pushOperand(string);
       return true;
     }
     // 0x12 s:32 n:32
@@ -264,16 +413,16 @@ bool Interpreter::step() {
     case 0x2: {
       Value stringOffset = readWord();
       uint32_t nargs = readWord();
-      if (stack.getOperandStackSize() < nargs) {
+      if (Stack::getOperandStackSize() < nargs) {
         runtimeError("cannot construct sexp of {} elements: operand stack "
                      "size is only {}",
-                     nargs, stack.getOperandStackSize());
+                     nargs, Stack::getOperandStackSize());
       }
       const char *string = byteFile.getStringAt(stringOffset);
       Value tagHash = LtagHash(const_cast<char *>(string));
-      std::reverse(stack.getTop(), stack.getTop() + nargs);
-      stack.pushOperand(0);
-      Value *base = stack.getTop();
+      std::reverse(Stack::top() + 1, Stack::top() + nargs + 1);
+      Stack::pushOperand(0);
+      Value *base = Stack::top() + 1;
       for (int i = 0; i < nargs; ++i) {
         base[i] = base[i + 1];
       }
@@ -281,20 +430,20 @@ bool Interpreter::step() {
 
       Value sexp = createSexp(nargs);
 
-      stack.popNOperands(nargs + 1);
-      stack.pushOperand(sexp);
+      Stack::popNOperands(nargs + 1);
+      Stack::pushOperand(sexp);
       return true;
     }
     // 0x14
     // STA
     case 0x4: {
-      Value value = stack.popOperand();
-      Value index = stack.popOperand();
-      Value container = stack.popOperand();
+      Value value = Stack::popOperand();
+      Value index = Stack::popOperand();
+      Value container = Stack::popOperand();
       Value result =
           reinterpret_cast<Value>(Bsta(reinterpret_cast<void *>(value), index,
                                        reinterpret_cast<void *>(container)));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x15 l:32
@@ -307,8 +456,8 @@ bool Interpreter::step() {
     // 0x16
     // END
     case 0x6: {
-      const char *returnAddress = stack.endFunction();
-      if (stack.isEmpty())
+      const char *returnAddress = Stack::endFunction();
+      if (Stack::isEmpty())
         return false;
       instructionPointer = returnAddress;
       return true;
@@ -316,23 +465,23 @@ bool Interpreter::step() {
     // 0x18
     // DROP
     case 0x8: {
-      stack.popOperand();
+      Stack::popOperand();
       return true;
     }
     // 0x19
     // DUP
     case 0x9: {
-      stack.pushOperand(stack.peakOperand());
+      Stack::pushOperand(Stack::peakOperand());
       return true;
     }
     // 0x1b
     // ELEM
     case 0xb: {
-      Value index = stack.popOperand();
-      Value container = stack.popOperand();
+      Value index = Stack::popOperand();
+      Value container = Stack::popOperand();
       Value element = reinterpret_cast<Value>(
           Belem(reinterpret_cast<void *>(container), index));
-      stack.pushOperand(element);
+      Stack::pushOperand(element);
       return true;
     }
     }
@@ -343,7 +492,7 @@ bool Interpreter::step() {
   case 0x2: {
     int32_t index = readWord();
     Value &var = accessVar(low, index);
-    stack.pushOperand(var);
+    Stack::pushOperand(var);
     return true;
   }
   // 0x3d n:32
@@ -351,8 +500,8 @@ bool Interpreter::step() {
   case 0x3: {
     int32_t index = readWord();
     Value *address = &accessVar(low, index);
-    stack.pushOperand(reinterpret_cast<Value>(address));
-    stack.pushOperand(reinterpret_cast<Value>(address));
+    Stack::pushOperand(reinterpret_cast<Value>(address));
+    Stack::pushOperand(reinterpret_cast<Value>(address));
     return true;
   }
   // 0x4d n:32
@@ -360,7 +509,7 @@ bool Interpreter::step() {
   case 0x4: {
     int32_t index = readWord();
     Value &var = accessVar(low, index);
-    Value operand = stack.peakOperand();
+    Value operand = Stack::peakOperand();
     var = operand;
     return true;
   }
@@ -372,7 +521,7 @@ bool Interpreter::step() {
     case 0x0:
     case 0x1: {
       uint32_t offset = readWord();
-      bool boolValue = stack.popIntOperand();
+      bool boolValue = Stack::popIntOperand();
       if (boolValue == (bool)low)
         instructionPointer = byteFile.getAddressFor(offset);
       return true;
@@ -386,7 +535,7 @@ bool Interpreter::step() {
       uint32_t nargs = readWord();
       uint32_t nlocals = readWord();
       bool isClosure = low == 0x3;
-      stack.beginFunction(nargs, nlocals);
+      Stack::beginFunction(nargs, nlocals);
       return true;
     }
     // 0x54 l:32 n:32 d*:32 *
@@ -406,30 +555,27 @@ bool Interpreter::step() {
       }
       std::reverse(values.begin(), values.end());
       for (Value value : values)
-        stack.pushOperand(value);
+        Stack::pushOperand(value);
 
       Value closure = createClosure(entry, n);
 
-      stack.popNOperands(n);
-      stack.pushOperand(closure);
+      Stack::popNOperands(n);
+      Stack::pushOperand(closure);
       return true;
     }
     // 0x55 n:32
     // CALLC nargs
     case 0x5: {
       uint32_t nargs = readWord();
-      if (stack.getOperandStackSize() < nargs + 1) {
+      if (Stack::getOperandStackSize() < nargs + 1) {
         runtimeError("cannot call closure with {} args: operand stack size is "
                      "too small ({})",
-                     nargs, stack.getOperandStackSize());
+                     nargs, Stack::getOperandStackSize());
       }
-      Value closure = stack.getTop()[nargs];
-      // for (int i = nargs - 1; i >= 0; --i)
-      //   stack.getTop()[i + 1] = stack.getTop()[i];
-      // stack.popOperand();
+      Value closure = Stack::top()[nargs + 1];
       const char *entry = *reinterpret_cast<const char **>(closure);
-      stack.setNextReturnAddress(instructionPointer);
-      stack.setNextIsClosure(true);
+      Stack::setNextReturnAddress(instructionPointer);
+      Stack::setNextIsClosure(true);
       instructionPointer = entry;
       return true;
     }
@@ -439,8 +585,8 @@ bool Interpreter::step() {
       uint32_t offset = readWord();
       const char *address = byteFile.getAddressFor(offset);
       readWord();
-      stack.setNextReturnAddress(instructionPointer);
-      stack.setNextIsClosure(false);
+      Stack::setNextReturnAddress(instructionPointer);
+      Stack::setNextIsClosure(false);
       instructionPointer = address;
       return true;
     }
@@ -451,21 +597,21 @@ bool Interpreter::step() {
       uint32_t nargs = readWord();
       const char *string = byteFile.getStringAt(stringOffset);
       Value tag = LtagHash(const_cast<char *>(string));
-      Value target = stack.popOperand();
+      Value target = Stack::popOperand();
 
       Value result = Btag((void *)target, tag, boxInt(nargs));
 
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x58 n:32
     // ARRAY n
     case 0x8: {
       uint32_t nelems = readWord();
-      Value array = stack.popOperand();
+      Value array = Stack::popOperand();
       Value result =
           Barray_patt(reinterpret_cast<void *>(array), boxInt(nelems));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x59 l:32 c:32
@@ -473,7 +619,7 @@ bool Interpreter::step() {
     case 0x9: {
       uint32_t line = readWord();
       uint32_t col = readWord();
-      Value v = stack.popOperand();
+      Value v = Stack::popOperand();
       Bmatch_failure((void *)v, const_cast<char *>(unknownFile), line,
                      col); // noreturn
     }
@@ -493,59 +639,59 @@ bool Interpreter::step() {
     // 0x60
     // PATT StrCmp
     case 0x0: {
-      Value x = stack.popOperand();
-      Value y = stack.popOperand();
+      Value x = Stack::popOperand();
+      Value y = Stack::popOperand();
       Value result = Bstring_patt(reinterpret_cast<void *>(x),
                                   reinterpret_cast<void *>(y));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x61
     // PATT String
     case 0x1: {
-      Value operand = stack.popOperand();
+      Value operand = Stack::popOperand();
       Value result = Bstring_tag_patt(reinterpret_cast<void *>(operand));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x62
     // PATT Array
     case 0x2: {
-      Value operand = stack.popOperand();
+      Value operand = Stack::popOperand();
       Value result = Barray_tag_patt(reinterpret_cast<void *>(operand));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x63
     // PATT Sexp
     case 0x3: {
-      Value operand = stack.popOperand();
+      Value operand = Stack::popOperand();
       Value result = Bsexp_tag_patt(reinterpret_cast<void *>(operand));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x64
     // PATT Boxed
     case 0x4: {
-      Value operand = stack.popOperand();
+      Value operand = Stack::popOperand();
       Value result = Bboxed_patt(reinterpret_cast<void *>(operand));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x65
     // PATT UnBoxed
     case 0x5: {
-      Value operand = stack.popOperand();
+      Value operand = Stack::popOperand();
       Value result = Bunboxed_patt(reinterpret_cast<void *>(operand));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     // 0x66
     // PATT Closure
     case 0x6: {
-      Value operand = stack.popOperand();
+      Value operand = Stack::popOperand();
       Value result = Bclosure_tag_patt(reinterpret_cast<void *>(operand));
-      stack.pushOperand(result);
+      Stack::pushOperand(result);
       return true;
     }
     default: {
@@ -559,45 +705,45 @@ bool Interpreter::step() {
     // 0x70
     // CALL Lread
     case 0x0: {
-      stack.pushOperand(Lread());
+      Stack::pushOperand(Lread());
       return true;
     }
     // 0x71
     // CALL Lwrite
     case 0x1: {
-      Lwrite(stack.popOperand());
-      stack.pushIntOperand(0);
+      Lwrite(Stack::popOperand());
+      Stack::pushIntOperand(0);
       return true;
     }
     // 0x72
     // CALL Llength
     case 0x2: {
-      Value string = stack.popOperand();
+      Value string = Stack::popOperand();
       Value length = Llength(reinterpret_cast<void *>(string));
-      stack.pushOperand(length);
+      Stack::pushOperand(length);
       return true;
     }
     // 0x73
     // CALL Lstring
     case 0x3: {
-      Value operand = stack.popOperand();
+      Value operand = Stack::popOperand();
       Value rendered = renderToString(operand);
-      stack.pushOperand(rendered);
+      Stack::pushOperand(rendered);
       return true;
     }
     // 0x74 n:32
     // CALL Barray n:32
     case 0x4: {
       uint32_t nargs = readWord();
-      if (stack.getOperandStackSize() < nargs) {
+      if (Stack::getOperandStackSize() < nargs) {
         runtimeError("cannot construct array of {} elements: operand stack "
                      "size is only {}",
-                     nargs, stack.getOperandStackSize());
+                     nargs, Stack::getOperandStackSize());
       }
-      std::reverse(stack.getTop(), stack.getTop() + nargs);
+      std::reverse(Stack::top() + 1, Stack::top() + nargs + 1);
       Value array = createArray(nargs);
-      stack.popNOperands(nargs);
-      stack.pushOperand(array);
+      Stack::popNOperands(nargs);
+      Stack::pushOperand(array);
       return true;
     }
     }
@@ -621,11 +767,11 @@ Value &Interpreter::accessVar(char designation, int32_t index) {
   case LOC_Global:
     return accessGlobal(index);
   case LOC_Local:
-    return stack.accessLocal(index);
+    return Stack::accessLocal(index);
   case LOC_Arg:
-    return stack.accessArg(index);
+    return Stack::accessArg(index);
   case LOC_Access:
-    Value *closure = reinterpret_cast<Value *>(stack.getClosure());
+    Value *closure = reinterpret_cast<Value *>(Stack::getClosure());
     return closure[index + 1];
   }
   runtimeError("unsupported variable designation {:#x}", designation);

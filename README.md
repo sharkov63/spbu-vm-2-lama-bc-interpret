@@ -29,3 +29,15 @@ Sort    2.18
 `which time` -f "Sort\t%U" lamac -i Sort.lama < /dev/null
 Sort    4.10
 ```
+
+
+After optimizating updating `__gc_stack_top` and `__gc_stack_bottom`:
+
+```
+`which time` -f "Sort\t%U" ./Sort
+Sort    1.08
+`which time` -f "Sort\t%U" ../YAILama Sort.bc
+Sort    1.87
+`which time` -f "Sort\t%U" lamac -i Sort.lama < /dev/null
+Sort    3.99
+```
