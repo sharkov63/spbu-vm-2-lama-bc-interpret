@@ -79,6 +79,17 @@ enum InstCode {
   I_DROP = 0x18,
   I_DUP = 0x19,
   I_ELEM = 0x1b,
+  I_CJMPz = 0x50,
+  I_CJMPnz = 0x51,
+  I_BEGIN = 0x52,
+  I_BEGINcl = 0x53,
+  I_CLOSURE = 0x54,
+  I_CALLC = 0x55,
+  I_CALL = 0x56,
+  I_TAG = 0x57,
+  I_ARRAY = 0x58,
+  I_FAIL = 0x59,
+  I_LINE = 0x5a,
 };
 
 static void initGlobalArea() {
@@ -481,33 +492,24 @@ bool Interpreter::step() {
     return true;
   }
   case 0x5: {
-    switch (low) {
-    // 0x5x l:32
-    // CJMPx l
-    //   where x = 'z' | x = 'nz'
-    case 0x0:
-    case 0x1: {
+    switch (byte) {
+    case I_CJMPz:
+    case I_CJMPnz: {
       uint32_t offset = readWord();
       bool boolValue = Stack::popIntOperand();
       if (boolValue == (bool)low)
         instructionPointer = byteFile.getAddressFor(offset);
       return true;
     }
-    // 0x5c n:32 n:32
-    // BEGIN nargs nlocals
-    //   0x52 - without closure
-    //   0x53 - with closure
-    case 0x2:
-    case 0x3: {
+    case I_BEGIN:
+    case I_BEGINcl: {
       uint32_t nargs = readWord();
       uint32_t nlocals = readWord();
       bool isClosure = low == 0x3;
       Stack::beginFunction(nargs, nlocals);
       return true;
     }
-    // 0x54 l:32 n:32 d*:32 *
-    // CLOSURE
-    case 0x4: {
+    case I_CLOSURE: {
       uint32_t entryOffset = readWord();
       uint32_t n = readWord();
 
@@ -530,9 +532,7 @@ bool Interpreter::step() {
       Stack::pushOperand(closure);
       return true;
     }
-    // 0x55 n:32
-    // CALLC nargs
-    case 0x5: {
+    case I_CALLC: {
       uint32_t nargs = readWord();
       if (Stack::getOperandStackSize() < nargs + 1) {
         runtimeError("cannot call closure with {} args: operand stack size is "
@@ -546,9 +546,7 @@ bool Interpreter::step() {
       instructionPointer = entry;
       return true;
     }
-    // 0x56 l:32 n:32
-    // CALL address nargs
-    case 0x6: {
+    case I_CALL: {
       uint32_t offset = readWord();
       const char *address = byteFile.getAddressFor(offset);
       readWord();
@@ -557,9 +555,7 @@ bool Interpreter::step() {
       instructionPointer = address;
       return true;
     }
-    // 0x57 s:32 n:32
-    // TAG s n
-    case 0x7: {
+    case I_TAG: {
       uint32_t stringOffset = readWord();
       uint32_t nargs = readWord();
       const char *string = byteFile.getStringAt(stringOffset);
@@ -571,9 +567,7 @@ bool Interpreter::step() {
       Stack::pushOperand(result);
       return true;
     }
-    // 0x58 n:32
-    // ARRAY n
-    case 0x8: {
+    case I_ARRAY: {
       uint32_t nelems = readWord();
       Value array = Stack::popOperand();
       Value result =
@@ -581,18 +575,14 @@ bool Interpreter::step() {
       Stack::pushOperand(result);
       return true;
     }
-    // 0x59 l:32 c:32
-    // FAIL l c
-    case 0x9: {
+    case I_FAIL: {
       uint32_t line = readWord();
       uint32_t col = readWord();
       Value v = Stack::popOperand();
       Bmatch_failure((void *)v, const_cast<char *>(unknownFile), line,
                      col); // noreturn
     }
-    // 0x5a n:32
-    // LINE n
-    case 0xa: {
+    case I_LINE: {
       readWord();
       return true;
     }
