@@ -53,23 +53,21 @@ enum VarDesignation {
   LOC_Access = 0x3,
 };
 
-enum Binop {
-  BINOP_Add = 0x1,
-  BINOP_Sub = 0x2,
-  BINOP_Mul = 0x3,
-  BINOP_Div = 0x4,
-  BINOP_Mod = 0x5,
-  BINOP_Lt = 0x6,
-  BINOP_Leq = 0x7,
-  BINOP_Gt = 0x8,
-  BINOP_Geq = 0x9,
-  BINOP_Eq = 0xa,
-  BINOP_Neq = 0xb,
-  BINOP_And = 0xc,
-  BINOP_Or = 0xd,
-};
-
 enum InstCode {
+  I_BINOP_Add = 0x01,
+  I_BINOP_Sub = 0x02,
+  I_BINOP_Mul = 0x03,
+  I_BINOP_Div = 0x04,
+  I_BINOP_Mod = 0x05,
+  I_BINOP_Lt = 0x06,
+  I_BINOP_Leq = 0x07,
+  I_BINOP_Gt = 0x08,
+  I_BINOP_Geq = 0x09,
+  I_BINOP_Eq = 0x0a,
+  I_BINOP_Neq = 0x0b,
+  I_BINOP_And = 0x0c,
+  I_BINOP_Or = 0x0d,
+
   I_CONST = 0x10,
   I_STRING = 0x11,
   I_SEXP = 0x12,
@@ -79,6 +77,21 @@ enum InstCode {
   I_DROP = 0x18,
   I_DUP = 0x19,
   I_ELEM = 0x1b,
+
+  I_LD_Global = 0x20,
+  I_LD_Local = 0x21,
+  I_LD_Arg = 0x22,
+  I_LD_Access = 0x23,
+
+  I_LDA_Global = 0x30,
+  I_LDA_Local = 0x31,
+  I_LDA_Arg = 0x32,
+  I_LDA_Access = 0x33,
+
+  I_ST_Global = 0x40,
+  I_ST_Local = 0x41,
+  I_ST_Arg = 0x42,
+  I_ST_Access = 0x43,
 
   I_CJMPz = 0x50,
   I_CJMPnz = 0x51,
@@ -360,40 +373,49 @@ bool Interpreter::step() {
   unsigned char byte = readByte();
   unsigned char high = (0xF0 & byte) >> 4;
   unsigned char low = 0x0F & byte;
-  switch (high) {
-  // BINOP
-  case 0x0: {
-    if (low == BINOP_Eq) {
-      Value rhs = Stack::popOperand();
-      Value lhs = Stack::popOperand();
-      Value result = boxInt(lhs == rhs);
-      Stack::pushOperand(result);
-      return true;
-    }
-
+  switch (byte) {
+  case I_BINOP_Eq: {
+    Value rhs = Stack::popOperand();
+    Value lhs = Stack::popOperand();
+    Value result = boxInt(lhs == rhs);
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_BINOP_Add:
+  case I_BINOP_Sub:
+  case I_BINOP_Mul:
+  case I_BINOP_Div:
+  case I_BINOP_Mod:
+  case I_BINOP_Lt:
+  case I_BINOP_Leq:
+  case I_BINOP_Gt:
+  case I_BINOP_Geq:
+  case I_BINOP_Neq:
+  case I_BINOP_And:
+  case I_BINOP_Or: {
     int32_t rhs = Stack::popIntOperand();
     int32_t lhs = Stack::popIntOperand();
-    if ((low == BINOP_Div || low == BINOP_Mod) && rhs == 0)
+    if ((low == I_BINOP_Div || low == I_BINOP_Mod) && rhs == 0)
       runtimeError("division by zero");
     int32_t result;
-    switch (low) {
+    switch (byte) {
 #define CASE(code, op)                                                         \
   case code: {                                                                 \
     result = lhs op rhs;                                                       \
     break;                                                                     \
   }
-      CASE(BINOP_Add, +)
-      CASE(BINOP_Sub, -)
-      CASE(BINOP_Mul, *)
-      CASE(BINOP_Div, /)
-      CASE(BINOP_Mod, %)
-      CASE(BINOP_Lt, <)
-      CASE(BINOP_Leq, <=)
-      CASE(BINOP_Gt, >)
-      CASE(BINOP_Geq, >=)
-      CASE(BINOP_Neq, !=)
-      CASE(BINOP_And, &&)
-      CASE(BINOP_Or, ||)
+      CASE(I_BINOP_Add, +)
+      CASE(I_BINOP_Sub, -)
+      CASE(I_BINOP_Mul, *)
+      CASE(I_BINOP_Div, /)
+      CASE(I_BINOP_Mod, %)
+      CASE(I_BINOP_Lt, <)
+      CASE(I_BINOP_Leq, <=)
+      CASE(I_BINOP_Gt, >)
+      CASE(I_BINOP_Geq, >=)
+      CASE(I_BINOP_Neq, !=)
+      CASE(I_BINOP_And, &&)
+      CASE(I_BINOP_Or, ||)
 #undef CASE
     default: {
       runtimeError("undefined binary operator with code {:x}", low);
@@ -402,300 +424,277 @@ bool Interpreter::step() {
     Stack::pushIntOperand(result);
     return true;
   }
-  case 0x1: {
-    switch (byte) {
-    case I_CONST: {
-      Stack::pushIntOperand(readWord());
-      return true;
-    }
-    case I_STRING: {
-      uint32_t offset = readWord();
-      const char *cstr = byteFile.getStringAt(offset);
-      Value string = createString(cstr);
-      Stack::pushOperand(string);
-      return true;
-    }
-    case I_SEXP: {
-      Value stringOffset = readWord();
-      uint32_t nargs = readWord();
-      if (Stack::getOperandStackSize() < nargs) {
-        runtimeError("cannot construct sexp of {} elements: operand stack "
-                     "size is only {}",
-                     nargs, Stack::getOperandStackSize());
-      }
-      const char *string = byteFile.getStringAt(stringOffset);
-      Value tagHash = LtagHash(const_cast<char *>(string));
-      std::reverse(Stack::top() + 1, Stack::top() + nargs + 1);
-      Stack::pushOperand(0);
-      Value *base = Stack::top() + 1;
-      for (int i = 0; i < nargs; ++i) {
-        base[i] = base[i + 1];
-      }
-      base[nargs] = tagHash;
-
-      Value sexp = createSexp(nargs);
-
-      Stack::popNOperands(nargs + 1);
-      Stack::pushOperand(sexp);
-      return true;
-    }
-    case I_STA: {
-      Value value = Stack::popOperand();
-      Value index = Stack::popOperand();
-      Value container = Stack::popOperand();
-      Value result =
-          reinterpret_cast<Value>(Bsta(reinterpret_cast<void *>(value), index,
-                                       reinterpret_cast<void *>(container)));
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_JMP: {
-      uint32_t offset = readWord();
-      instructionPointer = byteFile.getAddressFor(offset);
-      return true;
-    }
-    case I_END: {
-      const char *returnAddress = Stack::endFunction();
-      if (Stack::isEmpty())
-        return false;
-      instructionPointer = returnAddress;
-      return true;
-    }
-    case I_DROP: {
-      Stack::popOperand();
-      return true;
-    }
-    case I_DUP: {
-      Stack::pushOperand(Stack::peakOperand());
-      return true;
-    }
-    case I_ELEM: {
-      Value index = Stack::popOperand();
-      Value container = Stack::popOperand();
-      Value element = reinterpret_cast<Value>(
-          Belem(reinterpret_cast<void *>(container), index));
-      Stack::pushOperand(element);
-      return true;
-    }
-    }
-    break;
+  case I_CONST: {
+    Stack::pushIntOperand(readWord());
+    return true;
   }
-  // 0x2d n:32
-  // LD
-  case 0x2: {
+  case I_STRING: {
+    uint32_t offset = readWord();
+    const char *cstr = byteFile.getStringAt(offset);
+    Value string = createString(cstr);
+    Stack::pushOperand(string);
+    return true;
+  }
+  case I_SEXP: {
+    Value stringOffset = readWord();
+    uint32_t nargs = readWord();
+    if (Stack::getOperandStackSize() < nargs) {
+      runtimeError("cannot construct sexp of {} elements: operand stack "
+                   "size is only {}",
+                   nargs, Stack::getOperandStackSize());
+    }
+    const char *string = byteFile.getStringAt(stringOffset);
+    Value tagHash = LtagHash(const_cast<char *>(string));
+    std::reverse(Stack::top() + 1, Stack::top() + nargs + 1);
+    Stack::pushOperand(0);
+    Value *base = Stack::top() + 1;
+    for (int i = 0; i < nargs; ++i) {
+      base[i] = base[i + 1];
+    }
+    base[nargs] = tagHash;
+
+    Value sexp = createSexp(nargs);
+
+    Stack::popNOperands(nargs + 1);
+    Stack::pushOperand(sexp);
+    return true;
+  }
+  case I_STA: {
+    Value value = Stack::popOperand();
+    Value index = Stack::popOperand();
+    Value container = Stack::popOperand();
+    Value result =
+        reinterpret_cast<Value>(Bsta(reinterpret_cast<void *>(value), index,
+                                     reinterpret_cast<void *>(container)));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_JMP: {
+    uint32_t offset = readWord();
+    instructionPointer = byteFile.getAddressFor(offset);
+    return true;
+  }
+  case I_END: {
+    const char *returnAddress = Stack::endFunction();
+    if (Stack::isEmpty())
+      return false;
+    instructionPointer = returnAddress;
+    return true;
+  }
+  case I_DROP: {
+    Stack::popOperand();
+    return true;
+  }
+  case I_DUP: {
+    Stack::pushOperand(Stack::peakOperand());
+    return true;
+  }
+  case I_ELEM: {
+    Value index = Stack::popOperand();
+    Value container = Stack::popOperand();
+    Value element = reinterpret_cast<Value>(
+        Belem(reinterpret_cast<void *>(container), index));
+    Stack::pushOperand(element);
+    return true;
+  }
+  case I_LD_Global:
+  case I_LD_Local:
+  case I_LD_Arg:
+  case I_LD_Access: {
     int32_t index = readWord();
     Value &var = accessVar(low, index);
     Stack::pushOperand(var);
     return true;
   }
-  // 0x3d n:32
-  // LDA
-  case 0x3: {
+  case I_LDA_Global:
+  case I_LDA_Local:
+  case I_LDA_Arg:
+  case I_LDA_Access: {
     int32_t index = readWord();
     Value *address = &accessVar(low, index);
     Stack::pushOperand(reinterpret_cast<Value>(address));
     Stack::pushOperand(reinterpret_cast<Value>(address));
     return true;
   }
-  // 0x4d n:32
-  // ST
-  case 0x4: {
+  case I_ST_Global:
+  case I_ST_Local:
+  case I_ST_Arg:
+  case I_ST_Access: {
     int32_t index = readWord();
     Value &var = accessVar(low, index);
     Value operand = Stack::peakOperand();
     var = operand;
     return true;
   }
-  case 0x5: {
-    switch (byte) {
-    case I_CJMPz:
-    case I_CJMPnz: {
-      uint32_t offset = readWord();
-      bool boolValue = Stack::popIntOperand();
-      if (boolValue == (bool)low)
-        instructionPointer = byteFile.getAddressFor(offset);
-      return true;
-    }
-    case I_BEGIN:
-    case I_BEGINcl: {
-      uint32_t nargs = readWord();
-      uint32_t nlocals = readWord();
-      bool isClosure = low == 0x3;
-      Stack::beginFunction(nargs, nlocals);
-      return true;
-    }
-    case I_CLOSURE: {
-      uint32_t entryOffset = readWord();
-      uint32_t n = readWord();
-
-      const char *entry = byteFile.getAddressFor(entryOffset);
-
-      std::vector<Value> values;
-      for (int i = 0; i < n; ++i) {
-        char designation = readByte();
-        uint32_t index = readWord();
-        Value value = accessVar(designation, index);
-        values.push_back(value);
-      }
-      std::reverse(values.begin(), values.end());
-      for (Value value : values)
-        Stack::pushOperand(value);
-
-      Value closure = createClosure(entry, n);
-
-      Stack::popNOperands(n);
-      Stack::pushOperand(closure);
-      return true;
-    }
-    case I_CALLC: {
-      uint32_t nargs = readWord();
-      if (Stack::getOperandStackSize() < nargs + 1) {
-        runtimeError("cannot call closure with {} args: operand stack size is "
-                     "too small ({})",
-                     nargs, Stack::getOperandStackSize());
-      }
-      Value closure = Stack::top()[nargs + 1];
-      const char *entry = *reinterpret_cast<const char **>(closure);
-      Stack::setNextReturnAddress(instructionPointer);
-      Stack::setNextIsClosure(true);
-      instructionPointer = entry;
-      return true;
-    }
-    case I_CALL: {
-      uint32_t offset = readWord();
-      const char *address = byteFile.getAddressFor(offset);
-      readWord();
-      Stack::setNextReturnAddress(instructionPointer);
-      Stack::setNextIsClosure(false);
-      instructionPointer = address;
-      return true;
-    }
-    case I_TAG: {
-      uint32_t stringOffset = readWord();
-      uint32_t nargs = readWord();
-      const char *string = byteFile.getStringAt(stringOffset);
-      Value tag = LtagHash(const_cast<char *>(string));
-      Value target = Stack::popOperand();
-
-      Value result = Btag((void *)target, tag, boxInt(nargs));
-
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_ARRAY: {
-      uint32_t nelems = readWord();
-      Value array = Stack::popOperand();
-      Value result =
-          Barray_patt(reinterpret_cast<void *>(array), boxInt(nelems));
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_FAIL: {
-      uint32_t line = readWord();
-      uint32_t col = readWord();
-      Value v = Stack::popOperand();
-      Bmatch_failure((void *)v, const_cast<char *>(unknownFile), line,
-                     col); // noreturn
-    }
-    case I_LINE: {
-      readWord();
-      return true;
-    }
-    }
-    break;
+  case I_CJMPz:
+  case I_CJMPnz: {
+    uint32_t offset = readWord();
+    bool boolValue = Stack::popIntOperand();
+    if (boolValue == (bool)low)
+      instructionPointer = byteFile.getAddressFor(offset);
+    return true;
   }
-  // 0x6p
-  // PATT p
-  case 0x6: {
-    switch (byte) {
-    case I_PATT_StrCmp: {
-      Value x = Stack::popOperand();
-      Value y = Stack::popOperand();
-      Value result = Bstring_patt(reinterpret_cast<void *>(x),
-                                  reinterpret_cast<void *>(y));
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_PATT_String: {
-      Value operand = Stack::popOperand();
-      Value result = Bstring_tag_patt(reinterpret_cast<void *>(operand));
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_PATT_Array: {
-      Value operand = Stack::popOperand();
-      Value result = Barray_tag_patt(reinterpret_cast<void *>(operand));
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_PATT_Sexp: {
-      Value operand = Stack::popOperand();
-      Value result = Bsexp_tag_patt(reinterpret_cast<void *>(operand));
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_PATT_Boxed: {
-      Value operand = Stack::popOperand();
-      Value result = Bboxed_patt(reinterpret_cast<void *>(operand));
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_PATT_UnBoxed: {
-      Value operand = Stack::popOperand();
-      Value result = Bunboxed_patt(reinterpret_cast<void *>(operand));
-      Stack::pushOperand(result);
-      return true;
-    }
-    case I_PATT_Closure: {
-      Value operand = Stack::popOperand();
-      Value result = Bclosure_tag_patt(reinterpret_cast<void *>(operand));
-      Stack::pushOperand(result);
-      return true;
-    }
-    default: {
-      runtimeError("unsupported pattern kind {:#x}", low);
-    }
-    }
-    break;
+  case I_BEGIN:
+  case I_BEGINcl: {
+    uint32_t nargs = readWord();
+    uint32_t nlocals = readWord();
+    bool isClosure = low == 0x3;
+    Stack::beginFunction(nargs, nlocals);
+    return true;
   }
-  case 0x7: {
-    switch (byte) {
-    case I_CALL_Lread: {
-      Stack::pushOperand(Lread());
-      return true;
+  case I_CLOSURE: {
+    uint32_t entryOffset = readWord();
+    uint32_t n = readWord();
+
+    const char *entry = byteFile.getAddressFor(entryOffset);
+
+    std::vector<Value> values;
+    for (int i = 0; i < n; ++i) {
+      char designation = readByte();
+      uint32_t index = readWord();
+      Value value = accessVar(designation, index);
+      values.push_back(value);
     }
-    case I_CALL_Lwrite: {
-      Lwrite(Stack::popOperand());
-      Stack::pushIntOperand(0);
-      return true;
+    std::reverse(values.begin(), values.end());
+    for (Value value : values)
+      Stack::pushOperand(value);
+
+    Value closure = createClosure(entry, n);
+
+    Stack::popNOperands(n);
+    Stack::pushOperand(closure);
+    return true;
+  }
+  case I_CALLC: {
+    uint32_t nargs = readWord();
+    if (Stack::getOperandStackSize() < nargs + 1) {
+      runtimeError("cannot call closure with {} args: operand stack size is "
+                   "too small ({})",
+                   nargs, Stack::getOperandStackSize());
     }
-    case I_CALL_Llength: {
-      Value string = Stack::popOperand();
-      Value length = Llength(reinterpret_cast<void *>(string));
-      Stack::pushOperand(length);
-      return true;
+    Value closure = Stack::top()[nargs + 1];
+    const char *entry = *reinterpret_cast<const char **>(closure);
+    Stack::setNextReturnAddress(instructionPointer);
+    Stack::setNextIsClosure(true);
+    instructionPointer = entry;
+    return true;
+  }
+  case I_CALL: {
+    uint32_t offset = readWord();
+    const char *address = byteFile.getAddressFor(offset);
+    readWord();
+    Stack::setNextReturnAddress(instructionPointer);
+    Stack::setNextIsClosure(false);
+    instructionPointer = address;
+    return true;
+  }
+  case I_TAG: {
+    uint32_t stringOffset = readWord();
+    uint32_t nargs = readWord();
+    const char *string = byteFile.getStringAt(stringOffset);
+    Value tag = LtagHash(const_cast<char *>(string));
+    Value target = Stack::popOperand();
+
+    Value result = Btag((void *)target, tag, boxInt(nargs));
+
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_ARRAY: {
+    uint32_t nelems = readWord();
+    Value array = Stack::popOperand();
+    Value result = Barray_patt(reinterpret_cast<void *>(array), boxInt(nelems));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_FAIL: {
+    uint32_t line = readWord();
+    uint32_t col = readWord();
+    Value v = Stack::popOperand();
+    Bmatch_failure((void *)v, const_cast<char *>(unknownFile), line,
+                   col); // noreturn
+  }
+  case I_LINE: {
+    readWord();
+    return true;
+  }
+  case I_PATT_StrCmp: {
+    Value x = Stack::popOperand();
+    Value y = Stack::popOperand();
+    Value result =
+        Bstring_patt(reinterpret_cast<void *>(x), reinterpret_cast<void *>(y));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_PATT_String: {
+    Value operand = Stack::popOperand();
+    Value result = Bstring_tag_patt(reinterpret_cast<void *>(operand));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_PATT_Array: {
+    Value operand = Stack::popOperand();
+    Value result = Barray_tag_patt(reinterpret_cast<void *>(operand));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_PATT_Sexp: {
+    Value operand = Stack::popOperand();
+    Value result = Bsexp_tag_patt(reinterpret_cast<void *>(operand));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_PATT_Boxed: {
+    Value operand = Stack::popOperand();
+    Value result = Bboxed_patt(reinterpret_cast<void *>(operand));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_PATT_UnBoxed: {
+    Value operand = Stack::popOperand();
+    Value result = Bunboxed_patt(reinterpret_cast<void *>(operand));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_PATT_Closure: {
+    Value operand = Stack::popOperand();
+    Value result = Bclosure_tag_patt(reinterpret_cast<void *>(operand));
+    Stack::pushOperand(result);
+    return true;
+  }
+  case I_CALL_Lread: {
+    Stack::pushOperand(Lread());
+    return true;
+  }
+  case I_CALL_Lwrite: {
+    Lwrite(Stack::popOperand());
+    Stack::pushIntOperand(0);
+    return true;
+  }
+  case I_CALL_Llength: {
+    Value string = Stack::popOperand();
+    Value length = Llength(reinterpret_cast<void *>(string));
+    Stack::pushOperand(length);
+    return true;
+  }
+  case I_CALL_Lstring: {
+    Value operand = Stack::popOperand();
+    Value rendered = renderToString(operand);
+    Stack::pushOperand(rendered);
+    return true;
+  }
+  case I_CALL_Barray: {
+    uint32_t nargs = readWord();
+    if (Stack::getOperandStackSize() < nargs) {
+      runtimeError("cannot construct array of {} elements: operand stack "
+                   "size is only {}",
+                   nargs, Stack::getOperandStackSize());
     }
-    case I_CALL_Lstring: {
-      Value operand = Stack::popOperand();
-      Value rendered = renderToString(operand);
-      Stack::pushOperand(rendered);
-      return true;
-    }
-    case I_CALL_Barray: {
-      uint32_t nargs = readWord();
-      if (Stack::getOperandStackSize() < nargs) {
-        runtimeError("cannot construct array of {} elements: operand stack "
-                     "size is only {}",
-                     nargs, Stack::getOperandStackSize());
-      }
-      std::reverse(Stack::top() + 1, Stack::top() + nargs + 1);
-      Value array = createArray(nargs);
-      Stack::popNOperands(nargs);
-      Stack::pushOperand(array);
-      return true;
-    }
-    }
-    break;
+    std::reverse(Stack::top() + 1, Stack::top() + nargs + 1);
+    Value array = createArray(nargs);
+    Stack::popNOperands(nargs);
+    Stack::pushOperand(array);
+    return true;
   }
   }
   runtimeError("unsupported instruction code {:#04x}", byte);
