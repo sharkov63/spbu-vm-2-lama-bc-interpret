@@ -151,6 +151,11 @@ struct Stack {
   static Value &accessLocal(ssize_t index);
   static Value &accessArg(ssize_t index);
 
+  static void allocateNOperands(size_t noperands) {
+    frame.operandStackSize += noperands;
+    top() -= noperands;
+  }
+
   static void pushOperand(Value value) {
     ++frame.operandStackSize;
     *top() = value;
@@ -548,16 +553,13 @@ bool Interpreter::step() {
 
     const char *entry = byteFile.getAddressFor(entryOffset);
 
-    std::vector<Value> values;
+    Stack::allocateNOperands(n);
     for (int i = 0; i < n; ++i) {
       char designation = readByte();
       uint32_t index = readWord();
       Value value = accessVar(designation, index);
-      values.push_back(value);
+      Stack::top()[i + 1] = value;
     }
-    std::reverse(values.begin(), values.end());
-    for (Value value : values)
-      Stack::pushOperand(value);
 
     Value closure = createClosure(entry, n);
 
