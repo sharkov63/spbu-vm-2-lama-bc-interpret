@@ -140,10 +140,12 @@ struct Stack {
     frame.base = __gc_stack_bottom;
     // Two arguments to main: argc and argv
     __gc_stack_top = __gc_stack_bottom - 3;
-    frame.operandStackSize = 2;
+    frame.operandStackBase = frame.base;
   }
 
-  static size_t getOperandStackSize() { return frame.operandStackSize; }
+  static size_t getOperandStackSize() {
+    return frame.operandStackBase - top() - 1;
+  }
   static bool isEmpty() { return frameStack.empty(); }
   static bool isNotEmpty() { return !isEmpty(); }
   static Value getClosure();
@@ -151,13 +153,9 @@ struct Stack {
   static Value &accessLocal(ssize_t index);
   static Value &accessArg(ssize_t index);
 
-  static void allocateNOperands(size_t noperands) {
-    frame.operandStackSize += noperands;
-    top() -= noperands;
-  }
+  static void allocateNOperands(size_t noperands) { top() -= noperands; }
 
   static void pushOperand(Value value) {
-    ++frame.operandStackSize;
     *top() = value;
     --top();
   }
@@ -167,16 +165,14 @@ struct Stack {
   }
   static Value popOperand() {
     checkNonEmptyOperandStack();
-    --frame.operandStackSize;
     ++top();
     return *top();
   }
   static void popNOperands(size_t noperands) {
-    if (frame.operandStackSize < noperands) {
+    if (getOperandStackSize() < noperands) {
       runtimeError("cannot pop {} operands because operand stack size is {}",
-                   noperands, frame.operandStackSize);
+                   noperands, getOperandStackSize());
     }
-    frame.operandStackSize -= noperands;
     top() += noperands;
   }
 
@@ -203,7 +199,7 @@ struct Stack {
 
 private:
   static void checkNonEmptyOperandStack() {
-    if (frame.operandStackSize == 0) {
+    if (getOperandStackSize() == 0) {
       runtimeError("cannot pop from empty operand stack");
     }
   }
@@ -216,7 +212,7 @@ private:
     Value *top;
     size_t nargs;
     size_t nlocals;
-    size_t operandStackSize = 0;
+    Value *operandStackBase;
     const char *returnAddress;
   };
 
@@ -256,19 +252,18 @@ Value &Stack::accessArg(ssize_t index) {
 }
 void Stack::beginFunction(size_t nargs, size_t nlocals) {
   size_t noperands = nargs + nextIsClosure;
-  if (frame.operandStackSize < noperands) {
+  if (getOperandStackSize() < noperands) {
     runtimeError("expected {} operands, but found only {}", noperands,
-                 frame.operandStackSize);
+                 getOperandStackSize());
   }
   Value *newBase = top() + 1;
-  frame.operandStackSize -= noperands;
   frame.top = newBase + noperands - 1;
   frameStack.push_back(frame);
   frame.base = newBase;
   top() = newBase - nlocals - 1;
   frame.nargs = nargs;
   frame.nlocals = nlocals;
-  frame.operandStackSize = 0;
+  frame.operandStackBase = top() + 1;
   frame.returnAddress = nextReturnAddress;
   // Fill with some boxed values so that GC will skip these
   memset(top() + 1, 1, (char *)frame.base - (char *)(top() + 1));
@@ -278,10 +273,10 @@ const char *Stack::endFunction() {
   if (isEmpty()) {
     runtimeError("no function to end");
   }
-  if (frame.operandStackSize != 1) {
+  if (getOperandStackSize() != 1) {
     runtimeError(
         "attempt to end function with operand stack size {}, expected 1",
-        frame.operandStackSize);
+        getOperandStackSize());
   }
   const char *returnAddress = frame.returnAddress;
   Value ret = peakOperand();
