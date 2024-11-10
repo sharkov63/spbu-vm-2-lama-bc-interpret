@@ -130,6 +130,7 @@ static Value &accessGlobal(uint32_t index) {
 }
 
 #define STACK_SIZE (1 << 20)
+#define FRAME_STACK_SIZE (1 << 16)
 
 namespace {
 
@@ -146,7 +147,7 @@ struct Stack {
   static size_t getOperandStackSize() {
     return frame.operandStackBase - top() - 1;
   }
-  static bool isEmpty() { return frameStack.empty(); }
+  static bool isEmpty() { return frameStackSize == 0; }
   static bool isNotEmpty() { return !isEmpty(); }
   static Value getClosure();
 
@@ -217,7 +218,8 @@ private:
   };
 
   static Frame frame;
-  static std::vector<Frame> frameStack;
+  static std::array<Frame, FRAME_STACK_SIZE> frameStack;
+  static size_t frameStackSize;
 
   static const char *nextReturnAddress;
   static bool nextIsClosure;
@@ -228,7 +230,8 @@ private:
 std::array<Value, STACK_SIZE> Stack::data;
 
 Stack::Frame Stack::frame;
-std::vector<Stack::Frame> Stack::frameStack;
+std::array<Stack::Frame, FRAME_STACK_SIZE> Stack::frameStack;
+size_t Stack::frameStackSize = 0;
 const char *Stack::nextReturnAddress;
 bool Stack::nextIsClosure;
 
@@ -258,7 +261,7 @@ void Stack::beginFunction(size_t nargs, size_t nlocals) {
   }
   Value *newBase = top() + 1;
   frame.top = newBase + noperands - 1;
-  frameStack.push_back(frame);
+  frameStack[frameStackSize++] = frame;
   frame.base = newBase;
   top() = newBase - nlocals - 1;
   frame.nargs = nargs;
@@ -280,8 +283,7 @@ const char *Stack::endFunction() {
   }
   const char *returnAddress = frame.returnAddress;
   Value ret = peakOperand();
-  frame = frameStack.back();
-  frameStack.pop_back();
+  frame = frameStack[--frameStackSize];
   top() = frame.top;
   pushOperand(ret);
   return returnAddress;
