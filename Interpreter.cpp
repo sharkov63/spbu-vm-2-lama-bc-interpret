@@ -259,6 +259,9 @@ void Stack::beginFunction(size_t nargs, size_t nlocals) {
     runtimeError("expected {} operands, but found only {}", noperands,
                  getOperandStackSize());
   }
+  if (frameStackSize >= FRAME_STACK_SIZE) {
+    runtimeError("frame stack size exhausted");
+  }
   Value *newBase = top() + 1;
   frame.top = newBase + noperands - 1;
   frameStack[frameStackSize++] = frame;
